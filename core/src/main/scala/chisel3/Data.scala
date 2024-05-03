@@ -2,10 +2,8 @@
 
 package chisel3
 
-import chisel3.experimental.dataview.reify
-
 import scala.language.experimental.macros
-import chisel3.experimental.{Analog, BaseModule, DataMirror, FixedPoint, Interval}
+import chisel3.experimental.{Analog, BaseModule, DataMirror}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal._
 import chisel3.internal.firrtl._
@@ -146,8 +144,6 @@ object ActualDirection {
 }
 
 package experimental {
-  import chisel3.internal.requireIsHardware // Fix ambiguous import
-
   /** Experimental hardware construction reflection API
     */
   object DataMirror {
@@ -222,7 +218,7 @@ package experimental {
       * // )
       * }}}
       */
-    def modulePorts(target: BaseModule): Seq[(String, Data)] = target.getChiselPorts
+    def modulePorts(target: BaseModule): Seq[(String, Data)] = Seq.empty
 
     /** Returns a recursive representation of a module's ports with underscore-qualified names
       * {{{
@@ -318,24 +314,6 @@ private[chisel3] object cloneSupertype {
             // TODO: perhaps redefine Widths to allow >= op?
             if (elt1.width == (elt1.width.max(elt2.width))) elt1 else elt2
           case (elt1: SInt, elt2: SInt) => if (elt1.width == (elt1.width.max(elt2.width))) elt1 else elt2
-          case (elt1: FixedPoint, elt2: FixedPoint) => {
-            (elt1.binaryPoint, elt2.binaryPoint, elt1.width, elt2.width) match {
-              case (KnownBinaryPoint(bp1), KnownBinaryPoint(bp2), KnownWidth(w1), KnownWidth(w2)) =>
-                val maxBinaryPoint = bp1.max(bp2)
-                val maxIntegerWidth = (w1 - bp1).max(w2 - bp2)
-                FixedPoint((maxIntegerWidth + maxBinaryPoint).W, (maxBinaryPoint).BP)
-              case (KnownBinaryPoint(bp1), KnownBinaryPoint(bp2), _, _) =>
-                FixedPoint(Width(), (bp1.max(bp2)).BP)
-              case _ => FixedPoint()
-            }
-          }
-          case (elt1: Interval, elt2: Interval) =>
-            val range = if (elt1.range.width == elt1.range.width.max(elt2.range.width)) elt1.range else elt2.range
-            Interval(range)
-          case (elt1, elt2) =>
-            throw new AssertionError(
-              s"can't create $createdType with heterogeneous types ${elt1.getClass} and ${elt2.getClass}"
-            )
         }).asInstanceOf[T]
       }
       model.cloneTypeFull
@@ -629,7 +607,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     if (connectCompileOptions.emitStrictConnects) {
 
       try {
-        MonoConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.referenceUserModule)
+        MonoConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.currentModule.get)
       } catch {
         case MonoConnectException(message) =>
           throwException(
@@ -658,7 +636,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     }
     if (connectCompileOptions.emitStrictConnects) {
       try {
-        BiConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.referenceUserModule)
+        BiConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.currentModule.get)
       } catch {
         case BiConnectException(message) =>
           throwException(
@@ -697,7 +675,6 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     topBindingOpt match {
       case Some(binding: ReadOnlyBinding) =>
         throwException(s"internal error: attempted to generate LHS ref to ReadOnlyBinding $binding")
-      case Some(ViewBinding(target)) => reify(target).lref
       case Some(binding: TopBinding) => Node(this)
       case opt => throwException(s"internal error: unknown binding $opt in generating LHS ref")
     }
@@ -713,14 +690,6 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     }
     requireIsHardware(this)
     topBindingOpt match {
-      // DataView
-      case Some(ViewBinding(target)) => reify(target).ref
-      case Some(AggregateViewBinding(viewMap)) =>
-        viewMap.get(this) match {
-          case None => materializeWire() // FIXME FIRRTL doesn't have Aggregate Init expressions
-          // This should not be possible because Element does the lookup in .topBindingOpt
-          case x: Some[_] => throwException(s"Internal Error: In .ref for $this got '$topBindingOpt' and '$x'")
-        }
       // Literals
       case Some(ElementLitBinding(litArg)) => litArg
       case Some(BundleLitBinding(litMap)) =>
@@ -928,8 +897,6 @@ object Data {
         case (thiz: SInt, that: SInt) => thiz === that
         case (thiz: AsyncReset, that: AsyncReset) => thiz.asBool === that.asBool
         case (thiz: Reset, that: Reset) => thiz === that
-        case (thiz: Interval, that: Interval) => thiz === that
-        case (thiz: FixedPoint, that: FixedPoint) => thiz === that
         case (thiz: EnumType, that: EnumType) => thiz === that
         case (thiz: Clock, that: Clock) => thiz.asUInt === that.asUInt
         case (thiz: Vec[_], that: Vec[_]) =>
@@ -992,7 +959,7 @@ trait WireFactory {
     x.bind(WireBinding(Builder.forcedUserModule, Builder.currentWhen))
 
     pushCommand(DefWire(sourceInfo, x))
-    if (!compileOptions.explicitInvalidate || Builder.currentModule.get.isInstanceOf[ImplicitInvalidate]) {
+    if (!compileOptions.explicitInvalidate) {
       pushCommand(DefInvalid(sourceInfo, x.ref))
     }
 

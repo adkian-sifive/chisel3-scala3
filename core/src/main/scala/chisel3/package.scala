@@ -152,31 +152,6 @@ package object chisel3 {
     def asBool(dummy: Int*): Bool = asBool
   }
 
-  // Fixed Point is experimental for now, but we alias the implicit conversion classes here
-  // to minimize disruption with existing code.
-  implicit class fromDoubleToLiteral(double: Double)
-      extends experimental.FixedPoint.Implicits.fromDoubleToLiteral(double)
-
-  implicit class fromBigDecimalToLiteral(bigDecimal: BigDecimal)
-      extends experimental.FixedPoint.Implicits.fromBigDecimalToLiteral(bigDecimal)
-
-  // Interval is experimental for now, but we alias the implicit conversion classes here
-  //  to minimize disruption with existing code.
-  implicit class fromIntToLiteralInterval(int: Int)
-      extends experimental.Interval.Implicits.fromIntToLiteralInterval(int)
-
-  implicit class fromLongToLiteralInterval(long: Long)
-      extends experimental.Interval.Implicits.fromLongToLiteralInterval(long)
-
-  implicit class fromBigIntToLiteralInterval(bigInt: BigInt)
-      extends experimental.Interval.Implicits.fromBigIntToLiteralInterval(bigInt)
-
-  implicit class fromDoubleToLiteralInterval(double: Double)
-      extends experimental.Interval.Implicits.fromDoubleToLiteralInterval(double)
-
-  implicit class fromBigDecimalToLiteralInterval(bigDecimal: BigDecimal)
-      extends experimental.Interval.Implicits.fromBigDecimalToLiteralInterval(bigDecimal)
-
   implicit class fromIntToWidth(int: Int) {
     def W: Width = Width(int)
   }
@@ -367,7 +342,7 @@ package object chisel3 {
     "duplicated with DataMirror.fullModulePorts, this returns an internal API, will be removed in Chisel 3.6",
     "Chisel 3.5"
   )
-  def getModulePorts(m: Module): Seq[Port] = m.getPorts
+  def getModulePorts(m: Module): Seq[Port] = Seq.empty
 
   class BindingException(message: String) extends ChiselException(message)
 

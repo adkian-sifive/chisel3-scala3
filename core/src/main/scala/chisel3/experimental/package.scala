@@ -15,91 +15,16 @@ package object experimental {
   import scala.language.implicitConversions
   import chisel3.internal.BaseModule
 
-  // Implicit conversions for BlackBox Parameters
-  implicit def fromIntToIntParam(x:       Int):    IntParam = IntParam(BigInt(x))
-  implicit def fromLongToIntParam(x:      Long):   IntParam = IntParam(BigInt(x))
-  implicit def fromBigIntToIntParam(x:    BigInt): IntParam = IntParam(x)
-  implicit def fromDoubleToDoubleParam(x: Double): DoubleParam = DoubleParam(x)
-  implicit def fromStringToStringParam(x: String): StringParam = StringParam(x)
-
   @deprecated("This type has moved to chisel3", "Chisel 3.5")
   type ChiselEnum = EnumFactory
 
   // Rocket Chip-style clonemodule
-
-  /** A record containing the results of CloneModuleAsRecord
-    * The apply method is retrieves the element with the supplied name.
-    */
-  type ClonePorts = BaseModule.ClonePorts
-
-  object CloneModuleAsRecord {
-
-    /** Clones an existing module and returns a record of all its top-level ports.
-      * Each element of the record is named with a string matching the
-      * corresponding port's name and shares the port's type.
-      * @example {{{
-      * val q1 = Module(new Queue(UInt(32.W), 2))
-      * val q2_io = CloneModuleAsRecord(q1)("io").asInstanceOf[q1.io.type]
-      * q2_io.enq <> q1.io.deq
-      * }}}
-      */
-    def apply(
-      proto: BaseModule
-    )(
-      implicit sourceInfo: chisel3.internal.sourceinfo.SourceInfo,
-      compileOptions:      CompileOptions
-    ): ClonePorts = {
-      BaseModule.cloneIORecord(proto)
-    }
-  }
 
   val requireIsHardware = chisel3.internal.requireIsHardware
   val requireIsChiselType = chisel3.internal.requireIsChiselType
   type Direction = ActualDirection
   val Direction = ActualDirection
 
-  /** The same as [[IO]] except there is no prefix for the name of the val */
-  def FlatIO[T <: Record](gen: => T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = noPrefix {
-    import dataview._
-    def coerceDirection(d: Data) = {
-      import chisel3.{SpecifiedDirection => SD}
-      DataMirror.specifiedDirectionOf(gen) match {
-        case SD.Flip   => Flipped(d)
-        case SD.Input  => Input(d)
-        case SD.Output => Output(d)
-        case _         => d
-      }
-    }
-    val ports: Seq[Data] =
-      gen.elements.toSeq.reverse.map {
-        case (name, data) =>
-          val p = chisel3.IO(coerceDirection(chiselTypeClone(data).asInstanceOf[Data]))
-          p.suggestName(name)
-          p
-
-      }
-
-    implicit val dv: DataView[Seq[Data], T] = DataView.mapping(
-      _ => chiselTypeClone(gen).asInstanceOf[T],
-      (seq, rec) => seq.zip(rec.elements.toSeq.reverse).map { case (port, (_, field)) => port -> field }
-    )
-    ports.viewAs[T]
-  }
-
-  implicit class ChiselRange(val sc: StringContext) extends AnyVal {
-
-    import scala.language.experimental.macros
-
-    /** Specifies a range using mathematical range notation. Variables can be interpolated using
-      * standard string interpolation syntax.
-      * @example {{{
-      * UInt(range"[0, 2)")
-      * UInt(range"[0, \$myInt)")
-      * UInt(range"[0, \${myInt + 2})")
-      * }}}
-      */
-    def range(args: Any*): chisel3.internal.firrtl.IntervalRange = macro chisel3.internal.RangeTransform.apply
-  }
 
   class dump extends chisel3.internal.naming.dump
   class treedump extends chisel3.internal.naming.treedump

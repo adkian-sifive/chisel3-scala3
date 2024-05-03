@@ -3,10 +3,9 @@
 package chisel3.internal
 
 import chisel3._
-import chisel3.experimental.{Analog, BaseModule, FixedPoint, Interval, UnsafeEnum}
+import chisel3.experimental.{Analog, BaseModule, UnsafeEnum}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
-import chisel3.experimental.dataview.{isView, reify, reifyToAggregate}
 
 import scala.language.experimental.macros
 import chisel3.internal.sourceinfo.SourceInfo
@@ -96,7 +95,7 @@ private[chisel3] object MonoConnect {
     connectCompileOptions: CompileOptions,
     sink:                  Data,
     source:                Data,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Unit =
     (sink, source) match {
 
@@ -108,10 +107,6 @@ private[chisel3] object MonoConnect {
       case (sink_e: UInt, source_e: UInt) =>
         elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
       case (sink_e: SInt, source_e: SInt) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
-      case (sink_e: FixedPoint, source_e: FixedPoint) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
-      case (sink_e: Interval, source_e: Interval) =>
         elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
       case (sink_e: Clock, source_e: Clock) =>
         elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
@@ -131,28 +126,12 @@ private[chisel3] object MonoConnect {
       // Handle Vec case
       case (sink_v: Vec[Data @unchecked], source_v: Vec[Data @unchecked]) =>
         if (sink_v.length != source_v.length) { throw MismatchedVecException }
-
-        val sinkReified:   Option[Aggregate] = if (isView(sink_v)) reifyToAggregate(sink_v) else Some(sink_v)
-        val sourceReified: Option[Aggregate] = if (isView(source_v)) reifyToAggregate(source_v) else Some(source_v)
-
-        if (
-          sinkReified.nonEmpty && sourceReified.nonEmpty && canBulkConnectAggregates(
-            sinkReified.get,
-            sourceReified.get,
-            sourceInfo,
-            connectCompileOptions,
-            context_mod
-          )
-        ) {
-          pushCommand(Connect(sourceInfo, sinkReified.get.lref, sourceReified.get.ref))
-        } else {
-          for (idx <- 0 until sink_v.length) {
-            try {
-              implicit val compileOptions = connectCompileOptions
-              connect(sourceInfo, connectCompileOptions, sink_v(idx), source_v(idx), context_mod)
-            } catch {
-              case MonoConnectException(message) => throw MonoConnectException(s"($idx)$message")
-            }
+        for (idx <- 0 until sink_v.length) {
+          try {
+            implicit val compileOptions = connectCompileOptions
+            connect(sourceInfo, connectCompileOptions, sink_v(idx), source_v(idx), context_mod)
+          } catch {
+            case MonoConnectException(message) => throw MonoConnectException(s"($idx)$message")
           }
         }
       // Handle Vec connected to DontCare. Apply the DontCare to individual elements.
@@ -168,34 +147,19 @@ private[chisel3] object MonoConnect {
 
       // Handle Record case
       case (sink_r: Record, source_r: Record) =>
-        val sinkReified:   Option[Aggregate] = if (isView(sink_r)) reifyToAggregate(sink_r) else Some(sink_r)
-        val sourceReified: Option[Aggregate] = if (isView(source_r)) reifyToAggregate(source_r) else Some(source_r)
-
-        if (
-          sinkReified.nonEmpty && sourceReified.nonEmpty && canBulkConnectAggregates(
-            sinkReified.get,
-            sourceReified.get,
-            sourceInfo,
-            connectCompileOptions,
-            context_mod
-          )
-        ) {
-          pushCommand(Connect(sourceInfo, sinkReified.get.lref, sourceReified.get.ref))
-        } else {
-          // For each field, descend with right
-          for ((field, sink_sub) <- sink_r.elements) {
-            try {
-              source_r.elements.get(field) match {
-                case Some(source_sub) => connect(sourceInfo, connectCompileOptions, sink_sub, source_sub, context_mod)
-                case None => {
-                  if (connectCompileOptions.connectFieldsMustMatch) {
-                    throw MissingFieldException(field)
-                  }
+        // For each field, descend with right
+        for ((field, sink_sub) <- sink_r.elements) {
+          try {
+            source_r.elements.get(field) match {
+              case Some(source_sub) => connect(sourceInfo, connectCompileOptions, sink_sub, source_sub, context_mod)
+              case None => {
+                if (connectCompileOptions.connectFieldsMustMatch) {
+                  throw MissingFieldException(field)
                 }
               }
-            } catch {
-              case MonoConnectException(message) => throw MonoConnectException(s".$field$message")
             }
+          } catch {
+            case MonoConnectException(message) => throw MonoConnectException(s".$field$message")
           }
         }
       // Handle Record connected to DontCare. Apply the DontCare to individual elements.
@@ -210,8 +174,7 @@ private[chisel3] object MonoConnect {
         }
 
       // Source is DontCare - it may be connected to anything. It generates a defInvalid for the sink.
-      case (_sink: Element, DontCare) =>
-        val sink = reify(_sink) // Handle views
+      case (sink: Element, DontCare) =>
         pushCommand(DefInvalid(sourceInfo, sink.lref))
       // DontCare as a sink is illegal.
       case (DontCare, _) => throw DontCareCantBeSink
@@ -235,7 +198,7 @@ private[chisel3] object MonoConnect {
     connectCompileOptions: CompileOptions,
     sink:                  Aggregate,
     source:                Aggregate,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Boolean = {
     import ActualDirection.{Bidirectional, Input, Output}
     // If source has no location, assume in context module
@@ -334,7 +297,7 @@ private[chisel3] object MonoConnect {
     wantToBeSink:     Boolean,
     currentlyFlipped: Boolean,
     data:             Data,
-    context_mod:      RawModule
+    context_mod:      BaseModule
   ): Boolean = {
     val sdir = data.specifiedDirection
     val coercedFlip = sdir == SpecifiedDirection.Input
@@ -349,8 +312,8 @@ private[chisel3] object MonoConnect {
       case _ => true
     }
   }
-  def canBeSink(data:   Data, context_mod: RawModule): Boolean = traceFlow(true, false, data, context_mod)
-  def canBeSource(data: Data, context_mod: RawModule): Boolean = traceFlow(false, false, data, context_mod)
+  def canBeSink(data:   Data, context_mod: BaseModule): Boolean = traceFlow(true, false, data, context_mod)
+  def canBeSource(data: Data, context_mod: BaseModule): Boolean = traceFlow(false, false, data, context_mod)
 
   /** Check whether two aggregates can be bulk connected (<=) in FIRRTL. (MonoConnect case)
     *
@@ -363,7 +326,7 @@ private[chisel3] object MonoConnect {
     source:                Aggregate,
     sourceInfo:            SourceInfo,
     connectCompileOptions: CompileOptions,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Boolean = {
     // Assuming we're using a <>, check if a bulk connect is valid in that case
     def biConnectCheck =
@@ -391,13 +354,11 @@ private[chisel3] object MonoConnect {
   def elemConnect(
     implicit sourceInfo:   SourceInfo,
     connectCompileOptions: CompileOptions,
-    _sink:                 Element,
-    _source:               Element,
-    context_mod:           RawModule
+    sink:                 Element,
+    source:               Element,
+    context_mod:           BaseModule
   ): Unit = {
     import BindingDirection.{Input, Internal, Output} // Using extensively so import these
-    val sink = reify(_sink)
-    val source = reify(_source)
     // If source has no location, assume in context module
     // This can occur if is a literal, unbound will error previously
     val sink_mod:   BaseModule = sink.topBinding.location.getOrElse(throw UnwritableSinkException(sink, source))

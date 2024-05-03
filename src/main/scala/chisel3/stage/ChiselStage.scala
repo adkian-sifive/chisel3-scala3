@@ -158,7 +158,6 @@ object ChiselStage {
         Dependency[chisel3.stage.phases.Elaborate],
         Dependency[chisel3.stage.phases.AddImplicitOutputFile],
         Dependency[chisel3.stage.phases.AddImplicitOutputAnnotationFile],
-        Dependency[chisel3.stage.phases.MaybeAspectPhase],
         Dependency[chisel3.stage.phases.Convert]
       )
     }
@@ -179,7 +178,6 @@ object ChiselStage {
       override val targets = Seq(
         Dependency[chisel3.stage.phases.AddImplicitOutputFile],
         Dependency[chisel3.stage.phases.AddImplicitOutputAnnotationFile],
-        Dependency[chisel3.stage.phases.MaybeAspectPhase],
         Dependency[chisel3.stage.phases.Convert]
       )
     }
@@ -207,7 +205,6 @@ object ChiselStage {
         Dependency[chisel3.stage.phases.Elaborate],
         Dependency[chisel3.stage.phases.AddImplicitOutputFile],
         Dependency[chisel3.stage.phases.AddImplicitOutputAnnotationFile],
-        Dependency[chisel3.stage.phases.MaybeAspectPhase],
         Dependency[chisel3.stage.phases.Convert],
         Dependency[firrtl.stage.phases.Compiler]
       )
@@ -233,7 +230,6 @@ object ChiselStage {
         Dependency[chisel3.stage.phases.Elaborate],
         Dependency[chisel3.stage.phases.AddImplicitOutputFile],
         Dependency[chisel3.stage.phases.AddImplicitOutputAnnotationFile],
-        Dependency[chisel3.stage.phases.MaybeAspectPhase],
         Dependency[chisel3.stage.phases.Convert],
         Dependency[firrtl.stage.phases.Compiler]
       )
@@ -258,7 +254,6 @@ object ChiselStage {
         Dependency[chisel3.stage.phases.Elaborate],
         Dependency[chisel3.stage.phases.AddImplicitOutputFile],
         Dependency[chisel3.stage.phases.AddImplicitOutputAnnotationFile],
-        Dependency[chisel3.stage.phases.MaybeAspectPhase],
         Dependency[chisel3.stage.phases.Convert],
         Dependency[firrtl.stage.phases.Compiler]
       )

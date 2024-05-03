@@ -15,7 +15,7 @@ object attach {
     AttachException(": Conditional attach is not allowed!")
 
   // Actual implementation
-  private[chisel3] def impl(elts: Seq[Analog], contextModule: RawModule)(implicit sourceInfo: SourceInfo): Unit = {
+  private[chisel3] def impl(elts: Seq[Analog], contextModule: BaseModule)(implicit sourceInfo: SourceInfo): Unit = {
     if (Builder.whenDepth != 0) throw ConditionalAttachException
 
     // TODO Check that references are valid and can be attached

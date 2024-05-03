@@ -3,7 +3,6 @@
 package chisel3.internal
 
 import chisel3._
-import chisel3.experimental.dataview.{isView, reify, reifyToAggregate}
 import chisel3.experimental.{attach, Analog, BaseModule}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
@@ -79,7 +78,7 @@ private[chisel3] object BiConnect {
     connectCompileOptions: CompileOptions,
     left:                  Data,
     right:                 Data,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Unit = {
     (left, right) match {
       // Handle element case (root case)
@@ -109,27 +108,12 @@ private[chisel3] object BiConnect {
           throw MismatchedVecException
         }
 
-        val leftReified:  Option[Aggregate] = if (isView(left_v)) reifyToAggregate(left_v) else Some(left_v)
-        val rightReified: Option[Aggregate] = if (isView(right_v)) reifyToAggregate(right_v) else Some(right_v)
-
-        if (
-          leftReified.nonEmpty && rightReified.nonEmpty && canBulkConnectAggregates(
-            leftReified.get,
-            rightReified.get,
-            sourceInfo,
-            connectCompileOptions,
-            context_mod
-          )
-        ) {
-          pushCommand(Connect(sourceInfo, leftReified.get.lref, rightReified.get.lref))
-        } else {
-          for (idx <- 0 until left_v.length) {
-            try {
-              implicit val compileOptions = connectCompileOptions
-              connect(sourceInfo, connectCompileOptions, left_v(idx), right_v(idx), context_mod)
-            } catch {
-              case BiConnectException(message) => throw BiConnectException(s"($idx)$message")
-            }
+        for (idx <- 0 until left_v.length) {
+          try {
+            implicit val compileOptions = connectCompileOptions
+            connect(sourceInfo, connectCompileOptions, left_v(idx), right_v(idx), context_mod)
+          } catch {
+            case BiConnectException(message) => throw BiConnectException(s"($idx)$message")
           }
         }
       }
@@ -166,24 +150,7 @@ private[chisel3] object BiConnect {
           !MonoConnect.canBeSink(left_r, context_mod) || !MonoConnect.canBeSource(right_r, context_mod)
         val (newLeft, newRight) = if (flipConnection) (right_r, left_r) else (left_r, right_r)
 
-        val leftReified:  Option[Aggregate] = if (isView(newLeft)) reifyToAggregate(newLeft) else Some(newLeft)
-        val rightReified: Option[Aggregate] = if (isView(newRight)) reifyToAggregate(newRight) else Some(newRight)
-
-        if (
-          leftReified.nonEmpty && rightReified.nonEmpty && canBulkConnectAggregates(
-            leftReified.get,
-            rightReified.get,
-            sourceInfo,
-            connectCompileOptions,
-            context_mod
-          )
-        ) {
-          pushCommand(Connect(sourceInfo, leftReified.get.lref, rightReified.get.lref))
-        } else if (!emitStrictConnects) {
-          newLeft.legacyConnect(newRight)(sourceInfo)
-        } else {
-          recordConnect(sourceInfo, connectCompileOptions, left_r, right_r, context_mod)
-        }
+        recordConnect(sourceInfo, connectCompileOptions, left_r, right_r, context_mod)
 
       // Handle Records connected to DontCare
       case (left_r: Record, DontCare) =>
@@ -224,7 +191,7 @@ private[chisel3] object BiConnect {
     connectCompileOptions: CompileOptions,
     left_r:                Record,
     right_r:               Record,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Unit = {
     // Verify right has no extra fields that left doesn't have
 
@@ -270,7 +237,7 @@ private[chisel3] object BiConnect {
     source:                Aggregate,
     sourceInfo:            SourceInfo,
     connectCompileOptions: CompileOptions,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Boolean = {
 
     // check that the aggregates have the same types
@@ -304,13 +271,7 @@ private[chisel3] object BiConnect {
       case _ => true
     }
 
-    // do not bulk connect the 'io' pseudo-bundle of a BlackBox since it will be decomposed in FIRRTL
-    def blackBoxCheck = Seq(source, sink).map(_._parent).forall {
-      case Some(_: BlackBox) => false
-      case _ => true
-    }
-
-    typeCheck && contextCheck && bindingCheck && flow_check && sourceNotLiteralCheck && blackBoxCheck
+    typeCheck && contextCheck && bindingCheck && flow_check && sourceNotLiteralCheck
   }
 
   // These functions (finally) issue the connection operation
@@ -344,11 +305,11 @@ private[chisel3] object BiConnect {
     connectCompileOptions: CompileOptions,
     _left:                 Element,
     _right:                Element,
-    context_mod:           RawModule
+    context_mod:           BaseModule
   ): Unit = {
     import BindingDirection.{Input, Internal, Output} // Using extensively so import these
-    val left = reify(_left)
-    val right = reify(_right)
+    val left = _left
+    val right = _right
     // If left or right have no location, assume in context module
     // This can occur if one of them is a literal, unbound will error previously
     val left_mod:  BaseModule = left.topBinding.location.getOrElse(context_mod)
@@ -451,7 +412,7 @@ private[chisel3] object BiConnect {
   }
 
   // This function checks if analog element-level attaching is allowed, then marks the Analog as connected
-  def markAnalogConnected(implicit sourceInfo: SourceInfo, analog: Analog, contextModule: RawModule): Unit = {
+  def markAnalogConnected(implicit sourceInfo: SourceInfo, analog: Analog, contextModule: BaseModule): Unit = {
     analog.biConnectLocs.get(contextModule) match {
       case Some(sl) => throw AttachAlreadyBulkConnectedException(sl)
       case None     => // Do nothing

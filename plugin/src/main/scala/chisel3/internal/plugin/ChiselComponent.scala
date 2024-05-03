@@ -88,7 +88,6 @@ class ChiselComponent(val global: Global, arguments: ChiselPluginArguments)
         tq"chisel3.VerificationStatement"
       )
     private val shouldMatchModule:   Type => Boolean = shouldMatchGen(tq"chisel3.experimental.BaseModule")
-    private val shouldMatchInstance: Type => Boolean = shouldMatchGen(tq"chisel3.experimental.hierarchy.Instance[_]")
     private val shouldMatchChiselPrefixed: Type => Boolean =
       shouldMatchGen(
         tq"chisel3.experimental.AffectsChiselPrefix"
@@ -211,11 +210,6 @@ class ChiselComponent(val global: Global, arguments: ChiselPluginArguments)
         }
         // If an instance, just get a name but no prefix
         else if (shouldMatchModule(tpe)) {
-          val str = stringFromTermName(name)
-          val newRHS = transform(rhs)
-          val named = q"chisel3.internal.plugin.autoNameRecursively($str)($newRHS)"
-          treeCopy.ValDef(dd, mods, name, tpt, localTyper.typed(named))
-        } else if (shouldMatchInstance(tpe)) {
           val str = stringFromTermName(name)
           val newRHS = transform(rhs)
           val named = q"chisel3.internal.plugin.autoNameRecursively($str)($newRHS)"

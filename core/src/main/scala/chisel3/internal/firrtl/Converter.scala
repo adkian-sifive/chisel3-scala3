@@ -90,16 +90,6 @@ private[chisel3] object Converter {
       val uint = convert(ULit(unsigned, slit.width), ctx, info)
       fir.DoPrim(firrtl.PrimOps.AsSInt, Seq(uint), Seq.empty, fir.UnknownType)
     // TODO Simplify
-    case fplit @ FPLit(n, w, bp) =>
-      val unsigned = if (n < 0) (BigInt(1) << fplit.width.get) + n else n
-      val uint = convert(ULit(unsigned, fplit.width), ctx, info)
-      val lit = bp.asInstanceOf[KnownBinaryPoint].value
-      fir.DoPrim(firrtl.PrimOps.AsFixedPoint, Seq(uint), Seq(lit), fir.UnknownType)
-    case intervalLit @ IntervalLit(n, w, bp) =>
-      val unsigned = if (n < 0) (BigInt(1) << intervalLit.width.get) + n else n
-      val uint = convert(ULit(unsigned, intervalLit.width), ctx, info)
-      val lit = bp.asInstanceOf[KnownBinaryPoint].value
-      fir.DoPrim(firrtl.PrimOps.AsInterval, Seq(uint), Seq(n, n, lit), fir.UnknownType)
     case lit: ILit =>
       throwException(s"Internal Error! Unexpected ILit: $lit")
   }
@@ -319,8 +309,6 @@ private[chisel3] object Converter {
     case d: EnumType   => fir.UIntType(convert(d.width))
     case d: UInt       => fir.UIntType(convert(d.width))
     case d: SInt       => fir.SIntType(convert(d.width))
-    case d: FixedPoint => fir.FixedType(convert(d.width), convert(d.binaryPoint))
-    case d: Interval   => fir.IntervalType(d.range.lowerBound, d.range.upperBound, d.range.firrtlBinaryPoint)
     case d: Analog => fir.AnalogType(convert(d.width))
     case d: Vec[_] =>
       val childClearDir = clearDir ||
@@ -343,13 +331,6 @@ private[chisel3] object Converter {
     }
   }
 
-  def convert(name: String, param: Param): fir.Param = param match {
-    case IntParam(value)    => fir.IntParam(name, value)
-    case DoubleParam(value) => fir.DoubleParam(name, value)
-    case StringParam(value) => fir.StringParam(name, fir.StringLit(value))
-    case RawParam(value)    => fir.RawStringParam(name, value)
-  }
-
   def convert(port: Port, topDir: SpecifiedDirection = SpecifiedDirection.Unspecified): fir.Port = {
     val resolvedDir = SpecifiedDirection.fromParent(topDir, port.dir)
     val dir = resolvedDir match {
@@ -368,14 +349,6 @@ private[chisel3] object Converter {
   def convert(component: Component): fir.DefModule = component match {
     case ctx @ DefModule(_, name, ports, cmds) =>
       fir.Module(fir.NoInfo, name, ports.map(p => convert(p)), convert(cmds, ctx))
-    case ctx @ DefBlackBox(id, name, ports, topDir, params) =>
-      fir.ExtModule(
-        fir.NoInfo,
-        name,
-        ports.map(p => convert(p, topDir)),
-        id.desiredName,
-        params.map { case (name, p) => convert(name, p) }.toSeq
-      )
   }
 
   def convert(circuit: Circuit): fir.Circuit =

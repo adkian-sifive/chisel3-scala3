@@ -6,13 +6,11 @@ import scala.util.DynamicVariable
 import scala.collection.mutable.ArrayBuffer
 import chisel3._
 import chisel3.experimental._
-import chisel3.experimental.hierarchy.{Clone, ImportDefinitionAnnotation, Instance}
 import chisel3.internal.firrtl._
 import chisel3.internal.naming._
 import _root_.firrtl.annotations.{CircuitName, ComponentName, IsMember, ModuleName, Named, ReferenceTarget}
 import _root_.firrtl.annotations.AnnotationUtils.validComponentName
 import _root_.firrtl.{AnnotationSeq, RenameMap}
-import chisel3.experimental.dataview.{reify, reifySingleData}
 import chisel3.internal.Builder.Prefix
 import logger.LazyLogging
 
@@ -316,7 +314,6 @@ private[chisel3] trait HasId extends InstanceId {
     }
 
     val parentGuess: String = _parent match {
-      case Some(ViewParent) => s", in module '${reifyParent.pathName}'"
       case Some(p)          => s", in module '${p.pathName}'"
       case None             => ""
     }
@@ -324,18 +321,8 @@ private[chisel3] trait HasId extends InstanceId {
     nameGuess + parentGuess
   }
 
-  // Helper for reifying views if they map to a single Target
-  private[chisel3] def reifyTarget: Option[Data] = this match {
-    case d: Data => reifySingleData(d) // Only Data can be views
-    case bad => throwException(s"This shouldn't be possible - got $bad with ${_parent}")
-  }
-
-  // Helper for reifying the parent of a view if the view maps to a single Target
-  private[chisel3] def reifyParent: BaseModule = reifyTarget.flatMap(_._parent).getOrElse(ViewParent)
-
   // Implementation of public methods.
   def instanceName: String = _parent match {
-    case Some(ViewParent) => reifyTarget.map(_.instanceName).getOrElse(this.refName(ViewParent.fakeComponent))
     case Some(p) =>
       (p._component, this) match {
         case (Some(c), _) => refName(c)
@@ -348,16 +335,13 @@ private[chisel3] trait HasId extends InstanceId {
   }
   def pathName: String = _parent match {
     case None             => instanceName
-    case Some(ViewParent) => s"${reifyParent.pathName}.$instanceName"
     case Some(p)          => s"${p.pathName}.$instanceName"
   }
   def parentPathName: String = _parent match {
-    case Some(ViewParent) => reifyParent.pathName
     case Some(p)          => p.pathName
     case None             => throwException(s"$instanceName doesn't have a parent")
   }
   def parentModName: String = _parent match {
-    case Some(ViewParent) => reifyParent.name
     case Some(p)          => p.name
     case None             => throwException(s"$instanceName doesn't have a parent")
   }
@@ -368,7 +352,6 @@ private[chisel3] trait HasId extends InstanceId {
         case None    => instanceName
         case Some(o) => o.circuitName
       }
-    case Some(ViewParent) => reifyParent.circuitName
     case Some(p)          => p.circuitName
   }
 
@@ -413,7 +396,6 @@ private[chisel3] trait NamedComponent extends HasId {
     if (!validComponentName(name)) throwException(s"Illegal component name: $name (note: literals are illegal)")
     import _root_.firrtl.annotations.{Target, TargetToken}
     val root = _parent.map {
-      case ViewParent => reifyParent
       case other      => other
     }.get.getTarget // All NamedComponents will have a parent, only the top module can have None here
     Target.toTargetTokens(name).toList match {
@@ -427,7 +409,6 @@ private[chisel3] trait NamedComponent extends HasId {
     val localTarget = toTarget
     def makeTarget(p: BaseModule) = p.toAbsoluteTarget.ref(localTarget.ref).copy(component = localTarget.component)
     _parent match {
-      case Some(ViewParent) => makeTarget(reifyParent)
       case Some(parent)     => makeTarget(parent)
       case None             => localTarget
     }
@@ -455,11 +436,6 @@ private[chisel3] class ChiselContext() {
 
   // Records the different prefixes which have been scoped at this point in time
   var prefixStack: Prefix = Nil
-
-  // Views belong to a separate namespace (for renaming)
-  // The namespace outside of Builder context is useless, but it ensures that views can still be created
-  // and the resulting .toTarget is very clearly useless (_$$View$$_...)
-  val viewNamespace = Namespace.empty
 }
 
 private[chisel3] class DynamicContext(
@@ -467,42 +443,8 @@ private[chisel3] class DynamicContext(
   val throwOnFirstError:    Boolean,
   val warnReflectiveNaming: Boolean,
   val warningsAsErrors:     Boolean) {
-  val importDefinitionAnnos = annotationSeq.collect { case a: ImportDefinitionAnnotation[_] => a }
-
-  // Map holding the actual names of extModules
-  // Pick the definition name by default in case not passed through annotation.
-  val importDefinitionMap = importDefinitionAnnos
-    .map(a => a.definition.proto.name -> a.overrideDefName.getOrElse(a.definition.proto.name))
-    .toMap
-
-  // Helper function which does 2 things
-  // 1. Ensure there are no repeated names for imported Definitions - both Proto Names as well as ExtMod Names
-  // 2. Return the distinct definition / extMod names
-  private def checkAndGeDistinctProtoExtModNames() = {
-    val importAllDefinitionProtoNames = importDefinitionAnnos.map { a => a.definition.proto.name }
-    val importDistinctDefinitionProtoNames = importDefinitionMap.keys.toSeq
-    val importAllDefinitionExtModNames = importDefinitionMap.toSeq.map(_._2)
-    val importDistinctDefinitionExtModNames = importAllDefinitionExtModNames.distinct
-
-    if (importDistinctDefinitionProtoNames.length < importAllDefinitionProtoNames.length) {
-      val duplicates = importAllDefinitionProtoNames.diff(importDistinctDefinitionProtoNames).mkString(", ")
-      throwException(s"Expected distinct imported Definition names but found duplicates for: $duplicates")
-    }
-    if (importDistinctDefinitionExtModNames.length < importAllDefinitionExtModNames.length) {
-      val duplicates = importAllDefinitionExtModNames.diff(importDistinctDefinitionExtModNames).mkString(", ")
-      throwException(s"Expected distinct overrideDef names but found duplicates for: $duplicates")
-    }
-    (importAllDefinitionProtoNames ++ importAllDefinitionExtModNames).distinct
-  }
 
   val globalNamespace = Namespace.empty
-
-  // Ensure imported Definitions emit as ExtModules with the correct name so
-  // that instantiations will also use the correct name and prevent any name
-  // conflicts with Modules/Definitions in this elaboration
-  checkAndGeDistinctProtoExtModNames().foreach {
-    globalNamespace.name(_)
-  }
 
   val components = ArrayBuffer[Component]()
   val annotations = ArrayBuffer[ChiselAnnotation]()
@@ -518,9 +460,6 @@ private[chisel3] class DynamicContext(
     */
   val aspectModule: mutable.HashMap[BaseModule, BaseModule] = mutable.HashMap.empty[BaseModule, BaseModule]
 
-  // Views that do not correspond to a single ReferenceTarget and thus require renaming
-  val unnamedViews: ArrayBuffer[Data] = ArrayBuffer.empty
-
   // Set by object Module.apply before calling class Module constructor
   // Used to distinguish between no Module() wrapping, multiple wrappings, and rewrapping
   var readyForModuleConstr: Boolean = false
@@ -529,9 +468,6 @@ private[chisel3] class DynamicContext(
   var currentReset:         Option[Reset] = None
   val errors = new ErrorLog(warningsAsErrors)
   val namingStack = new NamingStack
-
-  // Used to indicate if this is the top-level module of full elaboration, or from a Definition
-  var inDefinition: Boolean = false
 }
 
 private[chisel3] object Builder extends LazyLogging {
@@ -588,10 +524,6 @@ private[chisel3] object Builder extends LazyLogging {
 
   def annotationSeq:       AnnotationSeq = dynamicContext.annotationSeq
   def namingStack:         NamingStack = dynamicContext.namingStack
-  def importDefinitionMap: Map[String, String] = dynamicContext.importDefinitionMap
-
-  def unnamedViews:  ArrayBuffer[Data] = dynamicContext.unnamedViews
-  def viewNamespace: Namespace = chiselContext.get.viewNamespace
 
   // Puts a prefix string onto the prefix stack
   def pushPrefix(d: String): Unit = {
@@ -612,7 +544,6 @@ private[chisel3] object Builder extends LazyLogging {
         case Index(_, ILit(n))    => Some(n.toString) // Vec static indexing
         case Index(_, ULit(n, _)) => Some(n.toString) // Vec lit indexing
         case Index(_, _: Node) => None // Vec dynamic indexing
-        case ModuleIO(_, n) => Some(n) // BlackBox port
       }
       def map2[A, B](a: Option[A], b: Option[A])(f: (A, A) => B): Option[B] =
         a.flatMap(ax => b.map(f(ax, _)))
@@ -628,7 +559,6 @@ private[chisel3] object Builder extends LazyLogging {
         case PortBinding(mod) if Builder.currentModule.contains(mod) => data.seedOpt
         case PortBinding(mod)                                        => map2(mod.seedOpt, data.seedOpt)(_ + "_" + _)
         case (_: LitBinding | _: DontCareBinding) => None
-        case _ => Some("view_") // TODO implement
       }
       id match {
         case d: Data => recData(d)
@@ -672,10 +602,7 @@ private[chisel3] object Builder extends LazyLogging {
   def currentModule_=(target: Option[BaseModule]): Unit = {
     dynamicContext.currentModule = target
   }
-  def aspectModule(module: BaseModule): Option[BaseModule] = dynamicContextVar.value match {
-    case Some(dynamicContext) => dynamicContext.aspectModule.get(module)
-    case _                    => None
-  }
+
 
   /** Retrieves the parent of a module based on the elaboration context
     *
@@ -683,25 +610,8 @@ private[chisel3] object Builder extends LazyLogging {
     * @param context the context the parent should be evaluated in
     * @return the parent of the module provided
     */
-  def retrieveParent(module: BaseModule, context: BaseModule): Option[BaseModule] = {
-    module._parent match {
-      case Some(parentModule) => { //if a parent exists investigate, otherwise return None
-        context match {
-          case aspect: ModuleAspect => { //if aspect context, do the translation
-            Builder.aspectModule(parentModule) match {
-              case Some(parentAspect) => Some(parentAspect) //we've found a translation
-              case _                  => Some(parentModule) //no translation found
-            }
-          } //otherwise just return our parent
-          case _ => Some(parentModule)
-        }
-      }
-      case _ => None
-    }
-  }
-  def addAspect(module: BaseModule, aspect: BaseModule): Unit = {
-    dynamicContext.aspectModule += ((module, aspect))
-  }
+  def retrieveParent(module: BaseModule, context: BaseModule): Option[BaseModule] = module._parent
+
   def forcedModule: BaseModule = currentModule match {
     case Some(module) => module
     case None =>
@@ -710,20 +620,7 @@ private[chisel3] object Builder extends LazyLogging {
         // A bare api call is, e.g. calling Wire() from the scala console).
       )
   }
-  def referenceUserModule: RawModule = {
-    currentModule match {
-      case Some(module: RawModule) =>
-        aspectModule(module) match {
-          case Some(aspect: RawModule) => aspect
-          case other => module
-        }
-      case _ =>
-        throwException(
-          "Error: Not in a RawModule. Likely cause: Missed Module() wrap, bare chisel API call, or attempting to construct hardware inside a BlackBox."
-          // A bare api call is, e.g. calling Wire() from the scala console).
-        )
-    }
-  }
+
   def forcedUserModule: RawModule = currentModule match {
     case Some(module: RawModule) => module
     case _ =>
@@ -768,12 +665,6 @@ private[chisel3] object Builder extends LazyLogging {
     dynamicContext.currentReset = newReset
   }
 
-  def inDefinition: Boolean = {
-    dynamicContextVar.value
-      .map(_.inDefinition)
-      .getOrElse(false)
-  }
-
   def forcedClock: Clock = currentClock.getOrElse(
     throwException("Error: No implicit clock.")
   )
@@ -801,11 +692,6 @@ private[chisel3] object Builder extends LazyLogging {
     * (Note: Map is Iterable[Tuple2[_,_]] and thus excluded)
     */
   def nameRecursively(prefix: String, nameMe: Any, namer: (HasId, String) => Unit): Unit = nameMe match {
-    case (id: Instance[_]) =>
-      id.underlying match {
-        case Clone(m: internal.BaseModule.ModuleClone[_]) => namer(m.getPorts, prefix)
-        case _ =>
-      }
     case (id: HasId) => namer(id, prefix)
     case Some(elt) => nameRecursively(prefix, elt, namer)
     case (iter: Iterable[_]) if iter.hasDefiniteSize =>
@@ -853,31 +739,12 @@ private[chisel3] object Builder extends LazyLogging {
     }
   }
 
-  // Builds a RenameMap for all Views that do not correspond to a single Data
-  // These Data give a fake ReferenceTarget for .toTarget and .toReferenceTarget that the returned
-  // RenameMap can split into the constituent parts
-  private[chisel3] def makeViewRenameMap: RenameMap = {
-    val renames = RenameMap()
-    for (view <- unnamedViews) {
-      val localTarget = view.toTarget
-      val absTarget = view.toAbsoluteTarget
-      val elts = getRecursiveFields.lazily(view, "").collect { case (elt: Element, _) => elt }
-      for (elt <- elts) {
-        val targetOfView = reify(elt)
-        renames.record(localTarget, targetOfView.toTarget)
-        renames.record(absTarget, targetOfView.toAbsoluteTarget)
-      }
-    }
-    renames
-  }
-
   private[chisel3] def build[T <: BaseModule](
     f:              => T,
     dynamicContext: DynamicContext,
     forceModName:   Boolean = true
   ): (Circuit, T) = {
     dynamicContextVar.withValue(Some(dynamicContext)) {
-      ViewParent // Must initialize the singleton in a Builder context or weird things can happen
       // in tiny designs/testcases that never access anything in chisel3.internal
       checkScalaVersion()
       logger.info("Elaborating design...")
@@ -888,7 +755,7 @@ private[chisel3] object Builder extends LazyLogging {
       errors.checkpoint(logger)
       logger.info("Done elaborating.")
 
-      (Circuit(components.last.name, components.toSeq, annotations.toSeq, makeViewRenameMap, newAnnotations.toSeq), mod)
+      (Circuit(components.last.name, components.toSeq, annotations.toSeq, null, newAnnotations.toSeq), mod)
     }
   }
   initializeSingletons()

@@ -2,15 +2,13 @@
 
 package chisel3
 
-import scala.language.experimental.macros
-
 import chisel3.internal._
 import chisel3.internal.Builder.pushOp
 import chisel3.internal.sourceinfo.{MuxTransform, SourceInfo}
 import chisel3.internal.firrtl._
 import chisel3.internal.firrtl.PrimOp._
 
-object Mux extends SourceInfoDoc {
+object Mux {
 
   /** Creates a mux, whose output is one of the inputs depending on the
     * value of the condition.
@@ -23,10 +21,7 @@ object Mux extends SourceInfoDoc {
     * val muxOut = Mux(data_in === 3.U, 3.U(4.W), 0.U(4.W))
     * }}}
     */
-  def apply[T <: Data](cond: Bool, con: T, alt: T): T = macro MuxTransform.apply[T]
-
-  /** @group SourceInfoTransformMacro */
-  def do_apply[T <: Data](
+  def apply[T <: Data](
     cond: Bool,
     con:  T,
     alt:  T

@@ -2,8 +2,6 @@
 
 package chisel3.experimental
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox.Context
 import scala.collection.mutable
 import chisel3._
 import chisel3.internal.Builder.pushOp
@@ -116,27 +114,20 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
     this := factory.apply(that.asUInt)
   }
 
-  final def ===(that: EnumType): Bool = macro SourceInfoTransform.thatArg
-  final def =/=(that: EnumType): Bool = macro SourceInfoTransform.thatArg
-  final def <(that:   EnumType): Bool = macro SourceInfoTransform.thatArg
-  final def <=(that:  EnumType): Bool = macro SourceInfoTransform.thatArg
-  final def >(that:   EnumType): Bool = macro SourceInfoTransform.thatArg
-  final def >=(that:  EnumType): Bool = macro SourceInfoTransform.thatArg
-
-  def do_===(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def ===(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, EqualOp, that)
-  def do_=/=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def =/=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, NotEqualOp, that)
-  def do_<(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def <(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, LessOp, that)
-  def do_>(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def >(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, GreaterOp, that)
-  def do_<=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def <=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, LessEqOp, that)
-  def do_>=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def >=(that: EnumType)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
     compop(sourceInfo, GreaterEqOp, that)
 
-  override def do_asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
+  override def asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
     pushOp(DefPrim(sourceInfo, UInt(width), AsUIntOp, ref))
 
   protected[chisel3] override def width: Width = factory.width
@@ -317,10 +308,7 @@ abstract class EnumFactory {
     enumRecords.find(_.inst.litValue == id).map(_.name)
   }
 
-  protected def Value: Type = macro EnumMacros.ValImpl
-  protected def Value(id: UInt): Type = macro EnumMacros.ValCustomImpl
-
-  protected def do_Value(name: String): Type = {
+  protected def Value(name: String): Type = {
     val result = new Type
 
     // We have to use UnknownWidth here, because we don't actually know what the final width will be
@@ -334,7 +322,7 @@ abstract class EnumFactory {
     result
   }
 
-  protected def do_Value(name: String, id: UInt): Type = {
+  protected def Value(name: String, id: UInt): Type = {
     // TODO: These throw ExceptionInInitializerError which can be confusing to the user. Get rid of the error, and just
     // throw an exception
     if (id.litOption.isEmpty) {
@@ -398,36 +386,6 @@ abstract class EnumFactory {
   def safe(n: UInt)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): (Type, Bool) = {
     val t = castImpl(n, warn = false)
     (t, t.isValid)
-  }
-}
-
-private[chisel3] object EnumMacros {
-  def ValImpl(c: Context): c.Tree = {
-    import c.universe._
-
-    // Much thanks to michael_s for this solution:
-    // stackoverflow.com/questions/18450203/retrieve-the-name-of-the-value-a-scala-macro-invocation-will-be-assigned-to
-    val term = c.internal.enclosingOwner
-    val name = term.name.decodedName.toString.trim
-
-    if (name.contains(" ")) {
-      c.abort(c.enclosingPosition, "Value cannot be called without assigning to an enum")
-    }
-
-    q"""this.do_Value($name)"""
-  }
-
-  def ValCustomImpl(c: Context)(id: c.Expr[UInt]): c.universe.Tree = {
-    import c.universe._
-
-    val term = c.internal.enclosingOwner
-    val name = term.name.decodedName.toString.trim
-
-    if (name.contains(" ")) {
-      c.abort(c.enclosingPosition, "Value cannot be called without assigning to an enum")
-    }
-
-    q"""this.do_Value($name, $id)"""
   }
 }
 

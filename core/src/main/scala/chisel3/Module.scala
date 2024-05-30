@@ -4,17 +4,16 @@ package chisel3
 
 import scala.collection.immutable.ListMap
 import scala.collection.mutable.{ArrayBuffer, HashMap}
-import scala.language.experimental.macros
 
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{InstTransform, SourceInfo, UnlocatableSourceInfo}
+import chisel3.internal.sourceinfo.{SourceInfo, UnlocatableSourceInfo}
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{IsModule, ModuleName, ModuleTarget}
 import _root_.firrtl.AnnotationSeq
 
-object Module extends SourceInfoDoc {
+object Module {
 
   /** A wrapper method that all Module instantiations must be wrapped in
     * (necessary to help Chisel track internal state).
@@ -23,10 +22,7 @@ object Module extends SourceInfoDoc {
     *
     * @return the input module `m` with Chisel metadata properly set
     */
-  def apply[T <: BaseModule](bc: => T): T = macro InstTransform.apply[T]
-
-  /** @group SourceInfoTransformMacro */
-  def do_apply[T <: BaseModule](bc: => T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: BaseModule](bc: => T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
     if (Builder.readyForModuleConstr) {
       throwException(
         "Error: Called Module() twice without instantiating a Module." +
@@ -250,7 +246,7 @@ package experimental {
     // Fresh Namespace because in Firrtl, Modules namespaces are disjoint with the global namespace
     private[chisel3] val _namespace = Namespace.empty
     private val _ids = ArrayBuffer[HasId]()
-    private[chisel3] def addId(d: HasId) {
+    private[chisel3] def addId(d: HasId) = {
       require(!_closed, "Can't write to module after module close")
       _ids += d
     }
@@ -358,7 +354,7 @@ package experimental {
     protected def nameIds(rootClass: Class[_]): HashMap[HasId, String] = {
       val names = new HashMap[HasId, String]()
 
-      def name(node: HasId, name: String) {
+      def name(node: HasId, name: String) = {
         // First name takes priority, like suggestName
         // TODO: DRYify with suggestName
         if (!names.contains(node)) {
@@ -397,7 +393,7 @@ package experimental {
       *
       * TODO: remove this, perhaps by removing Bindings checks in compatibility mode.
       */
-    def _compatAutoWrapPorts() {}
+    def _compatAutoWrapPorts() = {}
 
     /** Chisel2 code didn't require the IO(...) wrapper and would assign a Chisel type directly to
       * io, then do operations on it. This binds a Chisel type in-place (mutably) as an IO.

@@ -2,7 +2,6 @@
 
 package chisel3
 
-import scala.language.experimental.macros
 import chisel3.experimental.{Analog, BaseModule, DataMirror}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal._
@@ -442,7 +441,7 @@ object Flipped {
   * @groupdesc Connect Utilities for connecting hardware components
   * @define coll data
   */
-abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
+abstract class Data extends HasId with NamedComponent {
   // This is a bad API that punches through object boundaries.
   @deprecated("pending removal once all instances replaced", "chisel3")
   private[chisel3] def flatten: IndexedSeq[Element] = {
@@ -496,7 +495,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
   private def _binding:    Option[Binding] = Option(_bindingVar)
   // Only valid after node is bound (synthesizable), crashes otherwise
   protected[chisel3] def binding: Option[Binding] = _binding
-  protected def binding_=(target: Binding) {
+  protected def binding_=(target: Binding) = {
     if (_binding.isDefined) {
       throw RebindingException(s"Attempted reassignment of binding to $this, from: ${target}")
     }
@@ -536,7 +535,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
   private def _direction:    Option[ActualDirection] = Option(_directionVar)
 
   private[chisel3] def direction: ActualDirection = _direction.get
-  private[chisel3] def direction_=(actualDirection: ActualDirection) {
+  private[chisel3] def direction_=(actualDirection: ActualDirection) = {
     if (_direction.isDefined) {
       throw RebindingException(s"Attempted reassignment of resolved direction to $this")
     }
@@ -828,10 +827,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     * @note bit widths are NOT checked, may pad or drop bits from input
     * @note that should have known widths
     */
-  def asTypeOf[T <: Data](that: T): T = macro SourceInfoTransform.thatArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_asTypeOf[T <: Data](that: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def asTypeOf[T <: Data](that: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
     val thatCloned = Wire(that.cloneTypeFull)
     thatCloned.connectFromBits(this.asUInt)
     thatCloned
@@ -853,16 +849,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     * @note Aggregates are recursively packed with the first element appearing
     * in the least-significant bits of the result.
     */
-  final def asUInt: UInt = macro SourceInfoTransform.noArg
-
   @deprecated(
     "Calling this function with an empty argument list is invalid in Scala 3. Use the form without parentheses instead",
     "Chisel 3.5"
   )
-  final def asUInt(dummy: Int*): UInt = macro SourceInfoTransform.noArgDummy
-
-  /** @group SourceInfoTransformMacro */
-  def do_asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt
+  def asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt
 
   /** Default pretty printing */
   def toPrintable: Printable

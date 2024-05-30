@@ -3,7 +3,6 @@
 package chisel3
 
 import scala.util.Try
-import scala.language.experimental.macros
 import scala.annotation.nowarn
 import chisel3.experimental.BaseModule
 import chisel3.internal._
@@ -25,7 +24,7 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends 
   // Perhaps this should be an ArrayBuffer (or ArrayBuilder), but DefModule is public and has Seq[Command]
   // so our best option is to share a single Seq datastructure with that
   private val _commands = new VectorBuilder[Command]()
-  private[chisel3] def addCommand(c: Command) {
+  private[chisel3] def addCommand(c: Command) = {
     require(!_closed, "Can't write to module after module close")
     _commands += c
   }
@@ -48,7 +47,7 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends 
     case b: BaseModule => true
     case m: MemBase[_] => true
     // These names don't affect hardware
-    case _: VerificationStatement => false
+    // case _: VerificationStatement => false
     // While the above should be comprehensive, since this is used in warning we want to be careful
     // to never accidentally have a match error
     case _ => false
@@ -86,10 +85,10 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends 
       id match {
         case id: BaseModule       => id.forceName(default = id.desiredName, _namespace)
         case id: MemBase[_]       => id.forceName(default = "MEM", _namespace)
-        case id: stop.Stop        => id.forceName(default = "stop", _namespace)
-        case id: assert.Assert    => id.forceName(default = "assert", _namespace)
-        case id: assume.Assume    => id.forceName(default = "assume", _namespace)
-        case id: cover.Cover      => id.forceName(default = "cover", _namespace)
+        // removed till macros are fixed
+        // case id: assert.Assert    => id.forceName(default = "assert", _namespace)
+        // case id: assume.Assume    => id.forceName(default = "assume", _namespace)
+        // case id: cover.Cover      => id.forceName(default = "cover", _namespace)
         case id: printf.Printf => id.forceName(default = "printf", _namespace)
         case id: Data =>
           if (id.isSynthesizable) {

@@ -2,9 +2,6 @@
 
 package chisel3
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox.Context
-
 trait CompileOptions {
 
   /** Should Record connections require a strict match of fields.
@@ -40,14 +37,7 @@ trait CompileOptions {
 }
 
 object CompileOptions {
-  // Provides a low priority Strict default. Can be overridden by importing the NotStrict option.
-  // Implemented as a macro to prevent this from being used inside chisel core.
-  implicit def materialize: CompileOptions = macro materialize_impl
 
-  def materialize_impl(c: Context): c.Tree = {
-    import c.universe._
-    q"_root_.chisel3.ExplicitCompileOptions.Strict"
-  }
 }
 
 object ExplicitCompileOptions {

@@ -14,9 +14,6 @@
 
 package chisel3.internal.sourceinfo
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox.Context
-
 /** Abstract base class for generalized source information.
   */
 sealed trait SourceInfo {
@@ -45,18 +42,4 @@ case object DeprecatedSourceInfo extends NoSourceInfo
   */
 case class SourceLine(filename: String, line: Int, col: Int) extends SourceInfo {
   def makeMessage(f: String => String): String = f(s"@[$filename $line:$col]")
-}
-
-/** Provides a macro that returns the source information at the invocation point.
-  */
-object SourceInfoMacro {
-  def generate_source_info(c: Context): c.Tree = {
-    import c.universe._
-    val p = c.enclosingPosition
-    q"_root_.chisel3.internal.sourceinfo.SourceLine(${p.source.file.name}, ${p.line}, ${p.column})"
-  }
-}
-
-object SourceInfo {
-  implicit def materialize: SourceInfo = macro SourceInfoMacro.generate_source_info
 }

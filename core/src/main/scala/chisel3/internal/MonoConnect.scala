@@ -7,7 +7,6 @@ import chisel3.experimental.{Analog, BaseModule, UnsafeEnum}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
 
-import scala.language.experimental.macros
 import chisel3.internal.sourceinfo.SourceInfo
 import _root_.firrtl.passes.CheckTypes
 import scala.annotation.tailrec

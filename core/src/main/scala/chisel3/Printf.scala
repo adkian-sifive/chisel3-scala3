@@ -5,8 +5,6 @@ package chisel3
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.sourceinfo.SourceInfo
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox
 
 /** Prints a message in simulation
   *
@@ -37,7 +35,7 @@ object printf {
   }
 
   /** Named class for [[printf]]s. */
-  final class Printf private[chisel3] (val pable: Printable) extends VerificationStatement
+  final class Printf private[chisel3] (val pable: Printable) // extends VerificationStatement
 
   /** Prints a message in simulation
     *
@@ -76,30 +74,6 @@ object printf {
     * @param fmt printf format string
     * @param data format string varargs containing data to print
     */
-  def apply(fmt: String, data: Bits*)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Printf =
-    macro _applyMacroWithInterpolatorCheck
-
-  def _applyMacroWithInterpolatorCheck(
-    c:              blackbox.Context
-  )(fmt:            c.Tree,
-    data:           c.Tree*
-  )(sourceInfo:     c.Tree,
-    compileOptions: c.Tree
-  ): c.Tree = {
-    import c.universe._
-    fmt match {
-      case q"scala.StringContext.apply(..$_).s(..$_)" =>
-        c.warning(
-          c.enclosingPosition,
-          "The s-interpolator prints the Scala .toString of Data objects rather than the value " +
-            "of the hardware wire during simulation. Use the cf-interpolator instead. If you want " +
-            "an elaboration time print, use println."
-        )
-      case _ =>
-    }
-    val apply_impl_do = symbolOf[this.type].asClass.module.info.member(TermName("printfWithReset"))
-    q"$apply_impl_do(_root_.chisel3.Printable.pack($fmt, ..$data))($sourceInfo, $compileOptions)"
-  }
 
   // Private internal methods that serve to maintain binary
   // compatibility after interpolator check updates

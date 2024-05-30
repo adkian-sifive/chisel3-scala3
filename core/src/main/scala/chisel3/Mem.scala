@@ -2,8 +2,6 @@
 
 package chisel3
 
-import scala.language.experimental.macros
-
 import firrtl.{ir => fir}
 
 import chisel3.internal._
@@ -18,17 +16,13 @@ object Mem {
     * @param size number of elements in the memory
     * @param t data type of memory element
     */
-  def apply[T <: Data](size: BigInt, t: T): Mem[T] = macro MemTransform.apply[T]
-
   /** Creates a combinational/asynchronous-read, sequential/synchronous-write [[Mem]].
     *
     * @param size number of elements in the memory
     * @param t data type of memory element
     */
-  def apply[T <: Data](size: Int, t: T): Mem[T] = macro MemTransform.apply[T]
 
-  /** @group SourceInfoTransformMacro */
-  def do_apply[T <: Data](
+  def apply[T <: Data](
     size: BigInt,
     t:    T
   )(
@@ -45,9 +39,8 @@ object Mem {
     mem
   }
 
-  /** @group SourceInfoTransformMacro */
-  def do_apply[T <: Data](size: Int, t: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Mem[T] =
-    do_apply(BigInt(size), t)(sourceInfo, compileOptions)
+  def apply[T <: Data](size: Int, t: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Mem[T] =
+    apply(BigInt(size), t)(sourceInfo, compileOptions)
 }
 
 sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
@@ -77,10 +70,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
   /** Creates a read accessor into the memory with static addressing. See the
     * class documentation of the memory for more detailed information.
     */
-  def apply(x: BigInt): T = macro SourceInfoTransform.xArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_apply(idx: BigInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply(idx: BigInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
     require(idx >= 0 && idx < length)
     apply(idx.asUInt, Builder.forcedClock)
   }
@@ -88,45 +78,31 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
   /** Creates a read accessor into the memory with static addressing. See the
     * class documentation of the memory for more detailed information.
     */
-  def apply(x: Int): T = macro SourceInfoTransform.xArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_apply(idx: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_apply(BigInt(idx))(sourceInfo, compileOptions)
+  def apply(idx: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    apply(BigInt(idx))(sourceInfo, compileOptions)
 
   /** Creates a read/write accessor into the memory with dynamic addressing.
     * See the class documentation of the memory for more detailed information.
     */
-  def apply(x: UInt): T = macro SourceInfoTransform.xArg
+  def apply(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    apply_impl(idx, Builder.forcedClock, MemPortDirection.INFER, true)
 
-  /** @group SourceInfoTransformMacro */
-  def do_apply(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_apply_impl(idx, Builder.forcedClock, MemPortDirection.INFER, true)
-
-  def apply(x: UInt, y: Clock): T = macro SourceInfoTransform.xyArg
-
-  def do_apply(idx: UInt, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_apply_impl(idx, clock, MemPortDirection.INFER, false)
+  def apply(idx: UInt, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    apply_impl(idx, clock, MemPortDirection.INFER, false)
 
   /** Creates a read accessor into the memory with dynamic addressing. See the
     * class documentation of the memory for more detailed information.
     */
-  def read(x: UInt): T = macro SourceInfoTransform.xArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_read(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_apply_impl(idx, Builder.forcedClock, MemPortDirection.READ, true)
+  def read(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    apply_impl(idx, Builder.forcedClock, MemPortDirection.READ, true)
 
   /** Creates a read accessor into the memory with dynamic addressing.
     * Takes a clock parameter to bind a clock that may be different
     * from the implicit clock. See the class documentation of the memory
     * for more detailed information.
     */
-  def read(x: UInt, y: Clock): T = macro SourceInfoTransform.xyArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_read(idx: UInt, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_apply_impl(idx, clock, MemPortDirection.READ, false)
+  def read(idx: UInt, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    apply_impl(idx, clock, MemPortDirection.READ, false)
 
   protected def do_apply_impl(
     idx:   UInt,
@@ -297,19 +273,13 @@ object SyncReadMem {
     * @param size number of elements in the memory
     * @param t data type of memory element
     */
-  def apply[T <: Data](size: BigInt, t: T): SyncReadMem[T] = macro MemTransform.apply[T]
-  def apply[T <: Data](size: BigInt, t: T, ruw: ReadUnderWrite): SyncReadMem[T] = macro MemTransform.apply_ruw[T]
-
   /** Creates a sequential/synchronous-read, sequential/synchronous-write [[SyncReadMem]].
     *
     * @param size number of elements in the memory
     * @param t data type of memory element
     */
-  def apply[T <: Data](size: Int, t: T): SyncReadMem[T] = macro MemTransform.apply[T]
-  def apply[T <: Data](size: Int, t: T, ruw: ReadUnderWrite): SyncReadMem[T] = macro MemTransform.apply_ruw[T]
-
   /** @group SourceInfoTransformMacro */
-  def do_apply[T <: Data](
+  def apply[T <: Data](
     size: BigInt,
     t:    T,
     ruw:  ReadUnderWrite = Undefined
@@ -327,20 +297,18 @@ object SyncReadMem {
     mem
   }
 
-  /** @group SourceInfoTransformMacro */
   // Alternate signatures can't use default parameter values
-  def do_apply[T <: Data](
+  def apply[T <: Data](
     size: Int,
     t:    T
   )(
     implicit sourceInfo: SourceInfo,
     compileOptions:      CompileOptions
   ): SyncReadMem[T] =
-    do_apply(BigInt(size), t)(sourceInfo, compileOptions)
+    apply(BigInt(size), t)(sourceInfo, compileOptions)
 
-  /** @group SourceInfoTransformMacro */
   // Alternate signatures can't use default parameter values
-  def do_apply[T <: Data](
+  def apply[T <: Data](
     size: Int,
     t:    T,
     ruw:  ReadUnderWrite
@@ -348,7 +316,7 @@ object SyncReadMem {
     implicit sourceInfo: SourceInfo,
     compileOptions:      CompileOptions
   ): SyncReadMem[T] =
-    do_apply(BigInt(size), t, ruw)(sourceInfo, compileOptions)
+    apply(BigInt(size), t, ruw)(sourceInfo, compileOptions)
 }
 
 /** A sequential/synchronous-read, sequential/synchronous-write memory.
@@ -364,25 +332,15 @@ object SyncReadMem {
 sealed class SyncReadMem[T <: Data] private[chisel3] (t: T, n: BigInt, val readUnderWrite: SyncReadMem.ReadUnderWrite)
     extends MemBase[T](t, n) {
 
-  override def read(x: UInt): T = macro SourceInfoTransform.xArg
+  override def read(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+    read(idx = idx, en = true.B)
 
-  /** @group SourceInfoTransformMacro */
-  override def do_read(idx: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
-    do_read(idx = idx, en = true.B)
-
-  def read(x: UInt, en: Bool): T = macro SourceInfoTransform.xEnArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_read(idx: UInt, en: Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+  def read(idx: UInt, en: Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
     _read_impl(idx, en, Builder.forcedClock, true)
 
-  def read(idx: UInt, en: Bool, clock: Clock): T = macro SourceInfoTransform.xyzArg
-
-  /** @group SourceInfoTransformMacro */
-  def do_read(idx: UInt, en: Bool, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
+  def read(idx: UInt, en: Bool, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
     _read_impl(idx, en, clock, false)
 
-  /** @group SourceInfoTransformMacro */
   private def _read_impl(
     addr:   UInt,
     enable: Bool,
@@ -392,7 +350,7 @@ sealed class SyncReadMem[T <: Data] private[chisel3] (t: T, n: BigInt, val readU
     implicit sourceInfo: SourceInfo,
     compileOptions:      CompileOptions
   ): T = {
-    val a = Wire(UInt())
+    val a = Wire(UInt(4.W))
     a := DontCare
     var port: Option[T] = None
     when(enable) {

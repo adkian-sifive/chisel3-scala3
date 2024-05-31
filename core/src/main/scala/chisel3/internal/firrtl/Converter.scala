@@ -160,8 +160,6 @@ private[chisel3] object Converter {
       Some(fir.IsInvalid(convert(info), convert(arg, ctx, info)))
     case e @ DefInstance(info, id, _) =>
       Some(fir.DefInstance(convert(info), e.name, id.name))
-    case e @ Stop(_, info, clock, ret) =>
-      Some(fir.Stop(convert(info), ret, convert(clock, ctx, info), firrtl.Utils.one, e.name))
     case e @ Printf(_, info, clock, pable) =>
       val (fmt, args) = unpack(pable, ctx)
       Some(

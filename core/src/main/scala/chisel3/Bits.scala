@@ -5,13 +5,7 @@ package chisel3
 import chisel3.internal._
 import chisel3.internal.Builder.pushOp
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{
-  IntLiteralApplyTransform,
-  SourceInfo,
-  SourceInfoTransform,
-  SourceInfoWhiteboxTransform,
-  UIntTransform
-}
+import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.internal.firrtl.PrimOp._
 import _root_.firrtl.{ir => firrtlir}
 import _root_.firrtl.{constraint => firrtlconstraint}
@@ -106,7 +100,7 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
     * @return the specified bit
     */
   final def apply(x: BigInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
-    do_extract(x)
+    extract(x)
 
   /** Returns the specified bit on this $coll as a [[Bool]], statically addressed.
     *
@@ -114,7 +108,7 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
     * @return the specified bit
     */
   final def apply(x: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
-    do_extract(BigInt(x))
+    extract(BigInt(x))
 
   /** Returns the specified bit on this wire as a [[Bool]], dynamically addressed.
     *
@@ -132,7 +126,7 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
     * @return the specified bit
     */
   final def apply(x: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
-    do_extract(x)
+    extract(x)
 
   /** Returns a subset of bits on this $coll from `hi` to `lo` (inclusive), statically addressed.
     *
@@ -180,7 +174,7 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
     * @return a hardware component contain the requested bits
     */
   final def apply(x: BigInt, y: BigInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
-    do_apply(castToInt(x, "High index"), castToInt(y, "Low index"))
+    apply(castToInt(x, "High index"), castToInt(y, "Low index"))
 
   private[chisel3] def unop[T <: Data](sourceInfo: SourceInfo, dest: T, op: PrimOp): T = {
     requireIsHardware(this, "bits operated on")
@@ -320,6 +314,20 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
   }
 }
 
+object Bits {
+  def apply(): UInt = apply(Width())
+
+  /** Create a UInt port with specified width. */
+  def apply(width: Width): UInt = new UInt(width)
+
+  /** Create a UInt literal with specified width. */
+  protected[chisel3] def Lit(value: BigInt, width: Width): UInt = {
+    val lit = ULit(value, width)
+    val result = new UInt(lit.width)
+    // Bind result to being an Literal
+    lit.bindLitArg(result)
+  }  
+}
 /** A data type for unsigned integers, represented as a binary bitvector. Defines arithmetic operations between other
   * integer types.
   *
@@ -569,8 +577,8 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
   def rotateLeft(n: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = width match {
     case _ if (n == 0)             => this
     case KnownWidth(w) if (w <= 1) => this
-    case KnownWidth(w) if n >= w   => do_rotateLeft(n % w)
-    case _ if (n < 0)              => do_rotateRight(-n)
+    case KnownWidth(w) if n >= w   => rotateLeft(n % w)
+    case _ if (n < 0)              => rotateRight(-n)
     case _                         => tail(n) ## head(n)
   }
 
@@ -580,9 +588,9 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     * @return UInt of same width rotated right n bits
     */
   def rotateRight(n: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = width match {
-    case _ if (n <= 0)             => do_rotateLeft(-n)
+    case _ if (n <= 0)             => rotateLeft(-n)
     case KnownWidth(w) if (w <= 1) => this
-    case KnownWidth(w) if n >= w   => do_rotateRight(n % w)
+    case KnownWidth(w) if n >= w   => rotateRight(n % w)
     case _                         => this(n - 1, 0) ## (this >> n)
   }
 
@@ -590,7 +598,7 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     n:           UInt,
     staticShift: (UInt, Int) => UInt
   )(
-    implicit sourceInfo: SourceInfo,
+    using sourceInfo: SourceInfo,
     compileOptions:      CompileOptions
   ): UInt =
     n.asBools().zipWithIndex.foldLeft(this) {
@@ -646,6 +654,20 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     binop(sourceInfo, SInt((this.width.max(that.width)) + 1), SubOp, that)
 }
 
+object UInt {
+  def apply(): UInt = apply(Width())
+
+  /** Create a UInt port with specified width. */
+  def apply(width: Width): UInt = new UInt(width)
+
+  /** Create a UInt literal with specified width. */
+  protected[chisel3] def Lit(value: BigInt, width: Width): UInt = {
+    val lit = ULit(value, width)
+    val result = new UInt(lit.width)
+    // Bind result to being an Literal
+    lit.bindLitArg(result)
+  }
+}
 /** A data type for signed integers, represented as a binary bitvector. Defines arithmetic operations between other
   * integer types.
   *
@@ -662,6 +684,7 @@ sealed class SInt private[chisel3] (width: Width) extends Bits(width) with Num[S
     }
   }
 
+  
   private[chisel3] override def typeEquivalent(that: Data): Boolean =
     this.getClass == that.getClass && this.width == that.width // TODO: should this be true for unspecified widths?
 
@@ -850,6 +873,21 @@ sealed class SInt private[chisel3] (width: Width) extends Bits(width) with Num[S
     compileOptions:      CompileOptions
   ) = {
     this := that.asSInt
+  }
+}
+
+object SInt {
+  /** Create an SInt type with inferred width. */
+  def apply(): SInt = apply(Width())
+
+  /** Create a SInt type or port with fixed width. */
+  def apply(width: Width): SInt = new SInt(width)
+
+  /** Create an SInt literal with specified width. */
+  protected[chisel3] def Lit(value: BigInt, width: Width): SInt = {
+    val lit = SLit(value, width)
+    val result = new SInt(lit.width)
+    lit.bindLitArg(result)
   }
 }
 
@@ -1048,6 +1086,15 @@ sealed class Bool() extends UInt(1.W) with Reset {
 
   def asAsyncReset(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): AsyncReset =
     pushOp(DefPrim(sourceInfo, AsyncReset(), AsAsyncResetOp, ref))
+}
+
+object Bool {
+  def Lit(x: Boolean): Bool = {
+    val result = new Bool()
+    val lit = ULit(if (x) 1 else 0, Width(1))
+    lit.bindLitArg(result)
+  }
+  def apply(): Bool = new Bool()
 }
 
 package experimental {

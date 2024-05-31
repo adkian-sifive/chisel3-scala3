@@ -63,7 +63,7 @@ object ExplicitCompileOptions {
 
   // Collection of "not strict" connection compile options.
   // These provide compatibility with existing code.
-  implicit val NotStrict = new CompileOptionsClass(
+  implicit val NotStrict: CompileOptionsClass = new CompileOptionsClass(
     connectFieldsMustMatch = false,
     declaredTypeMustBeUnbound = false,
     dontTryConnectionsSwapped = false,
@@ -97,7 +97,7 @@ object ExplicitCompileOptions {
   }
 
   // Collection of "strict" connection compile options, preferred for new code.
-  implicit val Strict = new CompileOptionsClass(
+  implicit val Strict: CompileOptionsClass = new CompileOptionsClass(
     connectFieldsMustMatch = true,
     declaredTypeMustBeUnbound = true,
     dontTryConnectionsSwapped = true,

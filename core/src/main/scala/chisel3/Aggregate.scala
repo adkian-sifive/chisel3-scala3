@@ -67,8 +67,8 @@ sealed abstract class Aggregate extends Data {
     }
   }
 
-  override def asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = {
-    SeqUtils.asUInt(flatten.map(_.asUInt()))
+  override def asUInt(using sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = {
+    SeqUtils.asUInt(flatten.map(_.asUInt))
   }
 
   private[chisel3] override def connectFromBits(
@@ -94,13 +94,13 @@ sealed abstract class Aggregate extends Data {
   }
 }
 
-trait VecFactory {
+object Vec {
 
   /** Creates a new [[Vec]] with `n` entries of the specified data type.
     *
     * @note elements are NOT assigned by default and have no value
     */
-  def apply[T <: Data](n: Int, gen: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
+  def apply[T <: Data](n: Int, gen: T)(using sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
     if (compileOptions.declaredTypeMustBeUnbound) {
       requireIsChiselType(gen, "vec type")
     }
@@ -146,7 +146,7 @@ trait VecFactory {
   *  - when multiple conflicting assignments are performed on a Vec element, the last one takes effect (unlike Mem, where the result is undefined)
   *  - Vecs, unlike classes in Scala's collection library, are propagated intact to FIRRTL as a vector type, which may make debugging easier
   */
-sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extends Aggregate with VecLike[T] {
+sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extends Aggregate {
 
   override def toString: String = {
     topBindingOpt match {

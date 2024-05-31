@@ -3,11 +3,12 @@
 import chisel3.internal.firrtl.BinaryPoint
 import java.util.{MissingFormatArgumentException, UnknownFormatConversionException}
 import scala.collection.mutable
+import chisel3.experimental.VecLiterals._
+import chisel3.experimental.BundleLiterals._
 
 /** This package contains the main chisel3 API.
   */
 package object chisel3 {
-  import internal.chiselRuntimeDeprecated
   import internal.sourceinfo.DeprecatedSourceInfo
   import internal.firrtl.{Port, Width}
   import internal.Builder
@@ -158,7 +159,7 @@ package object chisel3 {
 
   val WireInit = WireDefault
 
-  object Vec extends VecFactory
+  // object Vec extends VecFactory
 
   // Some possible regex replacements for the literal specifier deprecation:
   // (note: these are not guaranteed to handle all edge cases! check all replacements!)
@@ -174,13 +175,13 @@ package object chisel3 {
   //  => $1.U($2.W)
   // (UInt|SInt|Bool)\(([_a-zA-Z][_0-9a-zA-Z]*)\)
   //  => $2.as$1
-  // (UInt|SInt)\(([_a-zA-Z][_0-9a-zA-Z]*),\s*(?:width\s*=)?\s*(\d+|[_a-zA-Z][_0-9a-zA-Z]*)\)
+  // (UInt|SInt)\(([_a-zA-Z][_0-9a-zA-Z]*),\s*(?:width\s*=)?\s*(\d+|[_a-zA-Z][_0-9a-zA-Z]*)\)n
   //  => $2.as$1($3.W)
 
-  object Bits extends UIntFactory
-  object UInt extends UIntFactory
-  object SInt extends SIntFactory
-  object Bool extends BoolFactory
+  // object Bits extends UIntFactory
+  // object UInt extends UIntFactory
+  // object SInt extends SIntFactory
+  // object Bool extends BoolFactory
 
   type InstanceId = internal.InstanceId
 

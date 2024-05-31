@@ -7,7 +7,7 @@ import firrtl.{ir => fir}
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{MemTransform, SourceInfo, SourceInfoTransform, SourceLine, UnlocatableSourceInfo}
+import chisel3.internal.sourceinfo.{SourceInfo, SourceLine, UnlocatableSourceInfo}
 
 object Mem {
 
@@ -104,7 +104,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
   def read(idx: UInt, clock: Clock)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T =
     apply_impl(idx, clock, MemPortDirection.READ, false)
 
-  protected def do_apply_impl(
+  protected def apply_impl(
     idx:   UInt,
     clock: Clock,
     dir:   MemPortDirection,
@@ -225,7 +225,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
     dir:        MemPortDirection,
     clock:      Clock
   )(
-    implicit compileOptions: CompileOptions
+    using compileOptions: CompileOptions
   ): T = {
     if (Builder.currentModule != _parent) {
       throwException(
@@ -233,7 +233,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
       )
     }
     requireIsHardware(idx, "memory port index")
-    val i = Vec.truncateIndex(idx, length)(sourceInfo, compileOptions)
+    val i = Vec.truncateIndex(idx, length)(compileOptions)
 
     val port = pushCommand(
       DefMemPort(sourceInfo, t.cloneTypeFull, Node(this), dir, i.ref, clock.ref)
@@ -347,7 +347,7 @@ sealed class SyncReadMem[T <: Data] private[chisel3] (t: T, n: BigInt, val readU
     clock:  Clock,
     warn:   Boolean
   )(
-    implicit sourceInfo: SourceInfo,
+    using sourceInfo: SourceInfo,
     compileOptions:      CompileOptions
   ): T = {
     val a = Wire(UInt(4.W))
@@ -355,7 +355,7 @@ sealed class SyncReadMem[T <: Data] private[chisel3] (t: T, n: BigInt, val readU
     var port: Option[T] = None
     when(enable) {
       a := addr
-      port = Some(super.do_apply_impl(a, clock, MemPortDirection.READ, warn))
+      port = Some(super.apply(a, clock, MemPortDirection.READ, warn))
     }
     port.get
   }

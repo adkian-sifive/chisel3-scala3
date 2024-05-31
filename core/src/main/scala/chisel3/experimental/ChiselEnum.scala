@@ -145,7 +145,7 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
     * @param s a [[scala.collection.Seq$ Seq]] of enumeration values to look for
     * @return a hardware [[Bool]] that indicates if this value matches any of the given values
     */
-  final def isOneOf(s: Seq[EnumType])(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
+  final def isOneOf(s: Seq[EnumType])(using sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
     VecInit(s.map(this === _)).asUInt().orR()
   }
 
@@ -333,7 +333,7 @@ abstract class EnumFactory {
     }
 
     this.id = id.litValue
-    do_Value(name)
+    Value(name)
   }
 
   def apply(): Type = new Type

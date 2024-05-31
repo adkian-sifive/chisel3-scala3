@@ -332,12 +332,7 @@ case class Connect(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
 case class BulkConnect(sourceInfo: SourceInfo, loc1: Node, loc2: Node) extends Command
 case class Attach(sourceInfo: SourceInfo, locs: Seq[Node]) extends Command
 case class ConnectInit(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
-case class Stop(id: stop.Stop, sourceInfo: SourceInfo, clock: Arg, ret: Int) extends Definition
-// Note this is just deprecated which will cause deprecation warnings, use @nowarn
-@deprecated(
-  "This API should never have been public, for Module port reflection, use DataMirror.modulePorts",
-  "Chisel 3.5"
-)
+
 case class Port(id: Data, dir: SpecifiedDirection)
 case class Printf(id: printf.Printf, sourceInfo: SourceInfo, clock: Arg, pable: Printable) extends Definition
 object Formal extends Enumeration {
@@ -345,15 +340,7 @@ object Formal extends Enumeration {
   val Assume = Value("assume")
   val Cover = Value("cover")
 }
-case class Verification[T <: VerificationStatement](
-  id:         T,
-  op:         Formal.Value,
-  sourceInfo: SourceInfo,
-  clock:      Arg,
-  predicate:  Arg,
-  message:    String)
-    extends Definition
-@nowarn("msg=class Port") // delete when Port becomes private
+
 abstract class Component extends Arg {
   def id:    BaseModule
   def name:  String

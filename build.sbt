@@ -4,164 +4,22 @@ import com.typesafe.tools.mima.core._
 
 Compile / compile / logLevel := Level.Error
 
-// enablePlugins(SiteScaladocPlugin)
-
 val scala3Version = "3.4.1"
 
 lazy val commonSettings = Seq (
-  resolvers ++= Seq(
-    Resolver.sonatypeRepo("snapshots"),
-    Resolver.sonatypeRepo("releases")
-  ),
   organization := "edu.berkeley.cs",
   version := "3.5.6",
   autoAPIMappings := true,
   scalaVersion := scala3Version,
   crossScalaVersions := Seq("2.13.10", "2.12.17", scala3Version),
-  scalacOptions := Seq("-rewrite", "-source:3.4-migration"),
-  // libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-  // Macros paradise is integrated into 2.13 but requires a scalacOption
-  scalacOptions ++= {
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
-      case _ => Nil
-    }
-  },
-  // libraryDependencies ++= {
-  //   CrossVersion.partialVersion(scalaVersion.value) match {
-  //     case Some((2, n)) if n >= 13 => Nil
-  //     case _ => compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full) :: Nil
-  //   }
-  // }
-)
-
-lazy val publishSettings = Seq (
-  versionScheme := Some("pvp"),
-  publishMavenStyle := true,
-  publishArtifact in Test := false,
-  pomIncludeRepository := { x => false },
-  pomExtra := <url>http://chisel.eecs.berkeley.edu/</url>
-    <licenses>
-      <license>
-        <name>apache-v2</name>
-        <url>https://opensource.org/licenses/Apache-2.0</url>
-        <distribution>repo</distribution>
-      </license>
-    </licenses>
-    <developers>
-      <developer>
-        <id>jackbackrack</id>
-        <name>Jonathan Bachrach</name>
-        <url>http://www.eecs.berkeley.edu/~jrb/</url>
-      </developer>
-    </developers>,
-
-  publishTo := {
-    val v = version.value
-    val nexus = "https://oss.sonatype.org/"
-    if (v.trim.endsWith("SNAPSHOT")) {
-      Some("snapshots" at nexus + "content/repositories/snapshots")
-    }
-    else {
-      Some("releases" at nexus + "service/local/staging/deploy/maven2")
-    }
-  }
+  scalacOptions := Seq("-rewrite", "-source:3.4-migration")
 )
 
 lazy val chiselSettings = Seq (
   name := "chisel3",
 )
 
-// autoCompilerPlugins := true
-
-// Plugin must be fully cross-versioned (published for Scala minor version)
-// The plugin only works in Scala 2.12+
-// lazy val pluginScalaVersions = Seq(
-//   // scalamacros paradise version used is not published for 2.12.0 and 2.12.1
-//   "2.12.2",
-//   "2.12.3",
-//   "2.12.4",
-//   "2.12.5",
-//   "2.12.6",
-//   "2.12.7",
-//   "2.12.8",
-//   "2.12.9",
-//   "2.12.10",
-//   "2.12.11",
-//   "2.12.12",
-//   "2.12.13",
-//   "2.12.14",
-//   "2.12.15",
-//   "2.12.16",
-//   "2.12.17",
-//   "2.13.0",
-//   "2.13.1",
-//   "2.13.2",
-//   "2.13.3",
-//   "2.13.4",
-//   "2.13.5",
-//   "2.13.6",
-//   "2.13.7",
-//   "2.13.8",
-//   "2.13.9",
-//   "2.13.10",
-// )
-
-// lazy val plugin = (project in file("plugin")).
-//   settings(name := "chisel3-plugin").
-//   settings(commonSettings: _*).
-//   settings(publishSettings: _*).
-//   settings(
-//     // libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-//     scalacOptions += "-Xfatal-warnings",
-//     crossScalaVersions := pluginScalaVersions,
-//     // Must be published for Scala minor version
-//     crossVersion := CrossVersion.full,
-//     crossTarget := {
-//       // workaround for https://github.com/sbt/sbt/issues/5097
-//       target.value / s"scala-${scalaVersion.value}"
-//     }
-//   ).
-//   settings(
-//     // Given that the plugin is 1) a compile-time only dependency and 2) package chisel3.internal,
-//     // I'm not really sure why we both checking binary compatbility
-//     mimaBinaryIssueFilters ++= Seq(
-//       // MyTypingTransformer is private (https://github.com/lightbend/mima/issues/53)
-//       ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.internal.plugin.BundleComponent#MyTypingTransformer.isBundle"),
-//       ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.internal.plugin.BundleComponent#MyTypingTransformer.getConstructorAndParams")
-//     ),
-//     mimaPreviousArtifacts := {
-//       // There are not yet artifacts for 2.12.17, 2.13.9, nor 2.13.10; suppress until 3.5.5 is released
-//       val skipVersions = Seq("2.12.17", "2.13.9", "2.13.10")
-//       if (skipVersions.contains(scalaVersion.value)) {
-//         Set()
-//       } else {
-//         Set("edu.berkeley.cs" % "chisel3-plugin" % "3.5.4" cross CrossVersion.full)
-//       }
-//     }
-//   )
-
-// lazy val usePluginSettings = Seq(
-//   scalacOptions in Compile ++= {
-//     val jar = (plugin / Compile / Keys.`package`).value
-//     val addPlugin = "-Xplugin:" + jar.getAbsolutePath
-//     // add plugin timestamp to compiler options to trigger recompile of
-//     // main after editing the plugin. (Otherwise a 'clean' is needed.)
-//     val dummy = "-Jdummy=" + jar.lastModified
-//     Seq(addPlugin, dummy)
-//   }
-// )
-
-// lazy val macros = (project in file("macros")).
-//   settings(name := "chisel3-macros").
-//   settings(commonSettings: _*).
-//   settings(publishSettings: _*).
-//   settings(mimaPreviousArtifacts := Set("edu.berkeley.cs" %% "chisel3-macros" % "3.5.4"))
-
-// lazy val firrtlRef = ProjectRef(workspaceDirectory / "firrtl", "firrtl")
-
 lazy val core = (project in file("core")).
-  // sourceDependency(firrtlRef, defaultVersions("firrtl")).
   settings(commonSettings: _*).
   enablePlugins(BuildInfoPlugin).
   settings(
@@ -169,132 +27,30 @@ lazy val core = (project in file("core")).
     buildInfoUsePackageAsPath := true,
     buildInfoKeys := Seq[BuildInfoKey](buildInfoPackage, version, scalaVersion, sbtVersion)
   ).
-  settings(publishSettings: _*).
   settings(
     libraryDependencies += "edu.berkeley.cs" % "firrtl_3" % "1.6-SNAPSHOT",
-    mimaPreviousArtifacts := Set("edu.berkeley.cs" %% "chisel3-core" % "3.5.4"),
-    mimaBinaryIssueFilters ++= Seq(
-      // This is not a problem because the relevant method is implemented (and final) in Vec and Record
-      ProblemFilters.exclude[ReversedMissingMethodProblem]("chisel3.Aggregate.elementsIterator"),
-      // Modified package private methods (https://github.com/lightbend/mima/issues/53)
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.Data._computeName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.Data.forceName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.MemBase._computeName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.MemBase.forceName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.VerificationStatement._computeName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.VerificationStatement.forceName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.experimental.BaseModule._computeName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.experimental.BaseModule.forceName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.VerificationStatement.failureMessage"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.Data.setRef"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.MemBase.setRef"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.VerificationStatement.setRef"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.experimental.BaseModule.setRef"),
-      // Methods in inner class defined within package private object
-      ProblemFilters.exclude[IncompatibleResultTypeProblem]("chisel3.internal.firrtl.Converter#WhenFrame.outer"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("chisel3.internal.firrtl.Converter#WhenFrame.copy"),
-      ProblemFilters.exclude[IncompatibleResultTypeProblem]("chisel3.internal.firrtl.Converter#WhenFrame.copy$default$2"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("chisel3.internal.firrtl.Converter#WhenFrame.this"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("chisel3.internal.firrtl.Converter#WhenFrame.apply"),
-    )
   ).
   settings(
     name := "chisel3-core",
     scalacOptions := scalacOptions.value ++ Seq(
-      "-deprecation",
       "-explaintypes",
       "-feature",
       "-language:reflectiveCalls",
       "-unchecked",
-      "-Xcheckinit",
-      "-Xlint:infer-any"
-//      , "-Xlint:missing-interpolator"
     )
   )
-  // dependsOn(macros)
 
 // This will always be the root project, even if we are a sub-project.
 lazy val root = RootProject(file("."))
 
 lazy val chisel = (project in file(".")).
-  // enablePlugins(ScalaUnidocPlugin).
   settings(commonSettings: _*).
   settings(chiselSettings: _*).
-  settings(publishSettings: _*).
-  // settings(usePluginSettings: _*).
-  // dependsOn(macros).
   dependsOn(core).
   aggregate(core).
   settings(
-    mimaPreviousArtifacts := Set("edu.berkeley.cs" %% "chisel3" % "3.5.4"),
-    mimaBinaryIssueFilters ++= Seq(
-      // Modified package private methods (https://github.com/lightbend/mima/issues/53)
-      ProblemFilters.exclude[DirectMissingMethodProblem]("chisel3.stage.ChiselOptions.this"),
-    ),
-    // libraryDependencies += defaultVersions("treadle") % "test",
-    // Test / scalacOptions += "-P:chiselplugin:genBundleElements",
-    // Forward doc command to unidoc
-    // Compile / doc := (ScalaUnidoc / doc).value,
-    // Include unidoc as the ScalaDoc for publishing
-    // Compile / packageDoc / mappings := (ScalaUnidoc / packageDoc / mappings).value,
     scalacOptions in Test ++= Seq("-language:reflectiveCalls"),
-    scalacOptions in Compile in doc ++= Seq(
-      "-diagrams",
-      "-groups",
-      "-skip-packages", "chisel3.internal",
-      "-diagrams-max-classes", "25",
-      "-doc-version", version.value,
-      "-doc-title", name.value,
-      "-doc-root-content", baseDirectory.value+"/root-doc.txt",
-      "-sourcepath", (baseDirectory in ThisBuild).value.toString,
-      "-doc-source-url",
-      {
-        val branch =
-          if (version.value.endsWith("-SNAPSHOT")) {
-            "master"
-          } else {
-            s"v${version.value}"
-          }
-        s"https://github.com/chipsalliance/chisel3/tree/$branch€{FILE_PATH_EXT}#L€{FILE_LINE}"
-      }
-    )
-    // Suppress compiler plugin for source files in core
-    // We don't need this in regular compile because we just don't add the chisel3-plugin to core's scalacOptions
-    // This works around an issue where unidoc uses the exact same arguments for all source files.
-    // This is probably fundamental to how ScalaDoc works so there may be no solution other than this workaround.
-    // See https://github.com/sbt/sbt-unidoc/issues/107
-    // (core / Compile / sources).value.map("-P:chiselplugin:INTERNALskipFile:" + _)
   )
-
-// tests elaborating and executing/formally verifying a Chisel circuit with chiseltest
-lazy val integrationTests = (project in file ("integration-tests")).
-  dependsOn(chisel).
-  settings(commonSettings: _*).
-  settings(chiselSettings: _*).
-  // settings(usePluginSettings: _*).
-  settings(Seq(
-    libraryDependencies += "edu.berkeley.cs" %% "chiseltest" % "0.5-SNAPSHOT" % "test"
-  ))
-
-// lazy val docs = project       // new documentation project
-//   .in(file("docs-target")) // important: it must not be docs/
-//   .dependsOn(chisel)
-//   // .enablePlugins(MdocPlugin)
-//   // .settings(usePluginSettings: _*)
-//   .settings(commonSettings)
-//   .settings(
-//     scalacOptions ++= Seq(
-//       "-language:reflectiveCalls",
-//       "-language:implicitConversions"
-//     ),
-//     mdocIn := file("docs/src"),
-//     mdocOut := file("docs/generated"),
-//     // None of our links are hygienic because they're primarily used on the website with .html
-//     mdocExtraArguments := Seq("--cwd", "docs", "--no-link-hygiene"),
-//     mdocVariables := Map(
-//       "BUILD_DIR" -> "docs-target" // build dir for mdoc programs to dump temp files
-//     )
-//   )
 
 addCommandAlias("com", "all compile")
 addCommandAlias("lint", "; compile:scalafix --check ; test:scalafix --check")

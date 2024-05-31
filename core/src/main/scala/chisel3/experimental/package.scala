@@ -2,9 +2,7 @@
 
 package chisel3
 
-import chisel3.ExplicitCompileOptions.Strict
 import chisel3.experimental.DataMirror.internal.chiselTypeClone
-import chisel3.internal.sourceinfo.SourceInfo
 
 /** Package for experimental features, which may have their API changed, be removed, etc.
   *
@@ -124,7 +122,7 @@ package object experimental {
 
   object BundleLiterals {
     implicit class AddBundleLiteralConstructor[T <: Record](x: T) {
-      def Lit(elems: (T => (Data, Data))*)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+      def Lit(elems: (T => (Data, Data))*): T = {
         x._makeLit(elems: _*)
       }
     }
@@ -141,7 +139,7 @@ package object experimental {
         * @param elems tuples of an index and a literal value
         * @return
         */
-      def Lit(elems: (Int, T)*)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
+      def Lit(elems: (Int, T)*): Vec[T] = {
         x._makeLit(elems: _*)
       }
     }
@@ -151,7 +149,7 @@ package object experimental {
       /** This provides an literal construction method for cases using
         * object `Vec` as in `Vec.Lit(1.U, 2.U)`
         */
-      def Lit[T <: Data](elems: T*)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
+      def Lit[T <: Data](elems: T*): Vec[T] = {
         require(elems.nonEmpty, s"Lit.Vec(...) must have at least one element")
         val indexElements: Seq[(Int, T)] = elems.zipWithIndex.map { case (element, index) => (index, element) }
         val widestElement: T = elems.maxBy(_.getWidth)
@@ -198,7 +196,7 @@ package object experimental {
     * Users may not instantiate this class directly. Instead they should use the implicit conversion from `Tuple2` in
     * `chisel3.experimental.conversions`
     */
-  final class HWTuple2[+A <: Data, +B <: Data] private[chisel3] (val _1: A, val _2: B) extends Bundle()(Strict) {
+  final class HWTuple2[+A <: Data, +B <: Data] private[chisel3] (val _1: A, val _2: B) extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin:   Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple2(chiselTypeClone(_1), chiselTypeClone(_2))
@@ -213,7 +211,7 @@ package object experimental {
     val _1: A,
     val _2: B,
     val _3: C)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple3(
@@ -233,7 +231,7 @@ package object experimental {
     val _2: B,
     val _3: C,
     val _4: D)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple4(
@@ -255,7 +253,7 @@ package object experimental {
     val _3: C,
     val _4: D,
     val _5: E)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple5(
@@ -279,7 +277,7 @@ package object experimental {
     val _4: D,
     val _5: E,
     val _6: F)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple6(
@@ -313,7 +311,7 @@ package object experimental {
     val _5: E,
     val _6: F,
     val _7: G)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple7(
@@ -350,7 +348,7 @@ package object experimental {
     val _6: F,
     val _7: G,
     val _8: H)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple8(
@@ -390,7 +388,7 @@ package object experimental {
     val _7: G,
     val _8: H,
     val _9: I)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple9(
@@ -433,7 +431,7 @@ package object experimental {
     val _8:  H,
     val _9:  I,
     val _10: J)
-      extends Bundle()(Strict) {
+      extends Bundle() {
     // Because this implementation exists in chisel3.core, it cannot compile with the plugin, so we implement the behavior manually
     override protected def _usingPlugin: Boolean = true
     override protected def _cloneTypeImpl: Bundle = new HWTuple10(

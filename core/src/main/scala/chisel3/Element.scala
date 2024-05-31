@@ -4,7 +4,6 @@ package chisel3
 
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.internal._
 
 /** Element is a leaf data type: it cannot contain other [[Data]] objects. Example uses are for representing primitive
@@ -56,14 +55,4 @@ abstract class Element extends Data {
 
   override def litOption:                Option[BigInt] = litArgOption.map(_.num)
   private[chisel3] def litIsForcedWidth: Option[Boolean] = litArgOption.map(_.forcedWidth)
-
-  private[chisel3] def legacyConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit = {
-    // If the source is a DontCare, generate a DefInvalid for the sink,
-    //  otherwise, issue a Connect.
-    if (that == DontCare) {
-      pushCommand(DefInvalid(sourceInfo, Node(this)))
-    } else {
-      pushCommand(Connect(sourceInfo, Node(this), that.ref))
-    }
-  }
 }

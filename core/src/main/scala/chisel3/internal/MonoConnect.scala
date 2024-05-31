@@ -7,7 +7,6 @@ import chisel3.experimental.{Analog, BaseModule, UnsafeEnum}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
 
-import chisel3.internal.sourceinfo.SourceInfo
 import _root_.firrtl.passes.CheckTypes
 import scala.annotation.tailrec
 
@@ -90,8 +89,6 @@ private[chisel3] object MonoConnect {
     * This gives the user a 'path' to where in the connections things went wrong.
     */
   def connect(
-    sourceInfo:            SourceInfo,
-    connectCompileOptions: CompileOptions,
     sink:                  Data,
     source:                Data,
     context_mod:           BaseModule
@@ -100,35 +97,34 @@ private[chisel3] object MonoConnect {
 
       // Handle legal element cases, note (Bool, Bool) is caught by the first two, as Bool is a UInt
       case (sink_e: Bool, source_e: UInt) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: UInt, source_e: Bool) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: UInt, source_e: UInt) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: SInt, source_e: SInt) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: Clock, source_e: Clock) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: AsyncReset, source_e: AsyncReset) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: ResetType, source_e: Reset) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: Reset, source_e: ResetType) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: EnumType, source_e: UnsafeEnum) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: EnumType, source_e: EnumType) if sink_e.typeEquivalent(source_e) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
       case (sink_e: UnsafeEnum, source_e: UInt) =>
-        elemConnect(sourceInfo, connectCompileOptions, sink_e, source_e, context_mod)
+        elemConnect(sink_e, source_e, context_mod)
 
       // Handle Vec case
       case (sink_v: Vec[Data @unchecked], source_v: Vec[Data @unchecked]) =>
         if (sink_v.length != source_v.length) { throw MismatchedVecException }
         for (idx <- 0 until sink_v.length) {
           try {
-            implicit val compileOptions = connectCompileOptions
-            connect(sourceInfo, connectCompileOptions, sink_v(idx), source_v(idx), context_mod)
+            connect(sink_v(idx), source_v(idx), context_mod)
           } catch {
             case MonoConnectException(message) => throw MonoConnectException(s"($idx)$message")
           }
@@ -137,8 +133,7 @@ private[chisel3] object MonoConnect {
       case (sink_v: Vec[Data @unchecked], DontCare) =>
         for (idx <- 0 until sink_v.length) {
           try {
-            implicit val compileOptions = connectCompileOptions
-            connect(sourceInfo, connectCompileOptions, sink_v(idx), source, context_mod)
+            connect(sink_v(idx), source, context_mod)
           } catch {
             case MonoConnectException(message) => throw MonoConnectException(s"($idx)$message")
           }
@@ -150,11 +145,9 @@ private[chisel3] object MonoConnect {
         for ((field, sink_sub) <- sink_r.elements) {
           try {
             source_r.elements.get(field) match {
-              case Some(source_sub) => connect(sourceInfo, connectCompileOptions, sink_sub, source_sub, context_mod)
+              case Some(source_sub) => connect(sink_sub, source_sub, context_mod)
               case None => {
-                if (connectCompileOptions.connectFieldsMustMatch) {
-                  throw MissingFieldException(field)
-                }
+                throw MissingFieldException(field)
               }
             }
           } catch {
@@ -166,7 +159,7 @@ private[chisel3] object MonoConnect {
         // For each field, descend with right
         for ((field, sink_sub) <- sink_r.elements) {
           try {
-            connect(sourceInfo, connectCompileOptions, sink_sub, source, context_mod)
+            connect(sink_sub, source, context_mod)
           } catch {
             case MonoConnectException(message) => throw MonoConnectException(s".$field$message")
           }
@@ -174,7 +167,7 @@ private[chisel3] object MonoConnect {
 
       // Source is DontCare - it may be connected to anything. It generates a defInvalid for the sink.
       case (sink: Element, DontCare) =>
-        pushCommand(DefInvalid(sourceInfo, sink.lref))
+        pushCommand(DefInvalid(sink.lref))
       // DontCare as a sink is illegal.
       case (DontCare, _) => throw DontCareCantBeSink
       // Analog is illegal in mono connections.
@@ -193,8 +186,6 @@ private[chisel3] object MonoConnect {
     * @return whether the source and sink exist in an appropriate context to be connected
     */
   private[chisel3] def aggregateConnectContextCheck(
-    implicit sourceInfo:   SourceInfo,
-    connectCompileOptions: CompileOptions,
     sink:                  Aggregate,
     source:                Aggregate,
     context_mod:           BaseModule
@@ -241,11 +232,10 @@ private[chisel3] object MonoConnect {
         case _                => false
       }
       // Thus, right node better be a port node and thus have a direction
-      if (!source_is_port) { !connectCompileOptions.dontAssumeDirectionality }
+      if (!source_is_port) { false }
       else if (sinkCanBeInput) {
-        if (source.direction == Output) {
-          !connectCompileOptions.dontTryConnectionsSwapped
-        } else { false }
+        if (source.direction == Output) { true }
+        else { false }
       } else { true }
     }
 
@@ -266,7 +256,7 @@ private[chisel3] object MonoConnect {
     //   Note: This includes case when sink and source in same module but in parent
     else if ((sink_parent == context_mod) && (source_parent == context_mod)) {
       // Thus both nodes must be ports and have a direction
-      if (!source_is_port) { !connectCompileOptions.dontAssumeDirectionality }
+      if (!source_is_port) { false }
       else if (sink_is_port) {
         // NOTE: Workaround for bulk connecting non-agnostified FIRRTL ports
         // See: https://github.com/freechipsproject/firrtl/issues/1703
@@ -323,13 +313,11 @@ private[chisel3] object MonoConnect {
   private[chisel3] def canBulkConnectAggregates(
     sink:                  Aggregate,
     source:                Aggregate,
-    sourceInfo:            SourceInfo,
-    connectCompileOptions: CompileOptions,
     context_mod:           BaseModule
   ): Boolean = {
     // Assuming we're using a <>, check if a bulk connect is valid in that case
     def biConnectCheck =
-      BiConnect.canBulkConnectAggregates(sink, source, sourceInfo, connectCompileOptions, context_mod)
+      BiConnect.canBulkConnectAggregates(sink, source, context_mod)
 
     // Check that the Aggregate can be driven (not bidirectional or an input) to match Chisel semantics
     def sinkCanBeDrivenCheck: Boolean =
@@ -339,20 +327,18 @@ private[chisel3] object MonoConnect {
   }
 
   // This function (finally) issues the connection operation
-  private def issueConnect(sink: Element, source: Element)(implicit sourceInfo: SourceInfo): Unit = {
+  private def issueConnect(sink: Element, source: Element): Unit = {
     // If the source is a DontCare, generate a DefInvalid for the sink,
     //  otherwise, issue a Connect.
     source.topBinding match {
-      case b: DontCareBinding => pushCommand(DefInvalid(sourceInfo, sink.lref))
-      case _ => pushCommand(Connect(sourceInfo, sink.lref, source.ref))
+      case b: DontCareBinding => pushCommand(DefInvalid(sink.lref))
+      case _ => pushCommand(Connect(sink.lref, source.ref))
     }
   }
 
   // This function checks if element-level connection operation allowed.
   // Then it either issues it or throws the appropriate exception.
   def elemConnect(
-    implicit sourceInfo:   SourceInfo,
-    connectCompileOptions: CompileOptions,
     sink:                 Element,
     source:               Element,
     context_mod:           BaseModule
@@ -398,15 +384,9 @@ private[chisel3] object MonoConnect {
         case (Internal, Input)  => issueConnect(sink, source)
         case (Output, Output)   => issueConnect(sink, source)
         case (Output, Input)    => issueConnect(sink, source)
-        case (_, Internal) => {
-          if (!(connectCompileOptions.dontAssumeDirectionality)) {
-            issueConnect(sink, source)
-          } else {
-            throw UnreadableSourceException(sink, source)
-          }
-        }
-        case (Input, Output) if (!(connectCompileOptions.dontTryConnectionsSwapped)) => issueConnect(source, sink)
-        case (Input, _)                                                              => throw UnwritableSinkException(sink, source)
+        case (_, Internal) => throw UnreadableSourceException(sink, source)
+        case (Input, Output)  => issueConnect(source, sink)
+        case (Input, _) => throw UnwritableSinkException(sink, source)
       }
     }
 
@@ -434,11 +414,7 @@ private[chisel3] object MonoConnect {
         case (Input, Output) => issueConnect(sink, source)
         case (Output, _)     => throw UnwritableSinkException(sink, source)
         case (_, Internal) => {
-          if (!(connectCompileOptions.dontAssumeDirectionality)) {
-            issueConnect(sink, source)
-          } else {
-            throw UnreadableSourceException(sink, source)
-          }
+          issueConnect(sink, source)
         }
         case (Internal, _) => throw UnwritableSinkException(sink, source)
       }

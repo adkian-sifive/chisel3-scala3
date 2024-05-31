@@ -3,7 +3,6 @@
 package chisel3.internal.firrtl
 import chisel3._
 import chisel3.experimental._
-import chisel3.internal.sourceinfo.{NoSourceInfo, SourceInfo, SourceLine, UnlocatableSourceInfo}
 import firrtl.{ir => fir}
 import chisel3.internal.{castToInt, throwException, HasId}
 
@@ -32,22 +31,19 @@ private[chisel3] object Converter {
     throwException(fullMsg)
   }
 
-  def getRef(id: HasId, sourceInfo: SourceInfo): Arg =
+  def getRef(id: HasId): Arg =
     id.getOptionRef.getOrElse {
       val module = id._parent.map(m => s" '$id' was defined in module '$m'.").getOrElse("")
-      val loc = sourceInfo.makeMessage(" " + _)
+      val loc = ""
       reportInternalError(s"Could not get ref for '$id'$loc!$module")
     }
 
-  private def clonedModuleIOError(mod: BaseModule, name: String, sourceInfo: SourceInfo): Nothing = {
-    val loc = sourceInfo.makeMessage(" " + _)
+  private def clonedModuleIOError(mod: BaseModule, name: String): Nothing = {
+    val loc = ""
     reportInternalError(s"Trying to convert a cloned IO of $mod inside of $mod itself$loc!")
   }
 
-  def convert(info: SourceInfo): fir.Info = info match {
-    case _: NoSourceInfo => fir.NoInfo
-    case SourceLine(fn, line, col) => fir.FileInfo(fir.StringLit(s"$fn $line:$col"))
-  }
+  // def convert(info: SourceInfo): fir.Info = fir.NoInfo
 
   def convert(op: PrimOp): fir.PrimOp = firrtl.PrimOps.fromString(op.name)
 
@@ -61,24 +57,24 @@ private[chisel3] object Converter {
   // TODO
   //   * Memoize?
   //   * Move into the Chisel IR?
-  def convert(arg: Arg, ctx: Component, info: SourceInfo): fir.Expression = arg match {
+  def convert(arg: Arg, ctx: Component): fir.Expression = arg match {
     case Node(id) =>
-      convert(getRef(id, info), ctx, info)
+      convert(getRef(id), ctx)
     case Ref(name) =>
       fir.Reference(name, fir.UnknownType)
     case Slot(imm, name) =>
-      fir.SubField(convert(imm, ctx, info), name, fir.UnknownType)
+      fir.SubField(convert(imm, ctx), name, fir.UnknownType)
     case OpaqueSlot(imm) =>
-      convert(imm, ctx, info)
+      convert(imm, ctx)
     case Index(imm, ILit(idx)) =>
-      fir.SubIndex(convert(imm, ctx, info), castToInt(idx, "Index"), fir.UnknownType)
+      fir.SubIndex(convert(imm, ctx), castToInt(idx, "Index"), fir.UnknownType)
     case Index(imm, value) =>
-      fir.SubAccess(convert(imm, ctx, info), convert(value, ctx, info), fir.UnknownType)
+      fir.SubAccess(convert(imm, ctx), convert(value, ctx), fir.UnknownType)
     case ModuleIO(mod, name) =>
       if (mod eq ctx.id) fir.Reference(name, fir.UnknownType)
-      else fir.SubField(fir.Reference(getRef(mod, info).name, fir.UnknownType), name, fir.UnknownType)
+      else fir.SubField(fir.Reference(getRef(mod).name, fir.UnknownType), name, fir.UnknownType)
     case ModuleCloneIO(mod, name) =>
-      if (mod eq ctx.id) clonedModuleIOError(mod, name, info)
+      if (mod eq ctx.id) clonedModuleIOError(mod, name)
       else fir.Reference(name)
     case u @ ULit(n, UnknownWidth()) =>
       fir.UIntLiteral(n, fir.IntWidth(u.minWidth))
@@ -87,7 +83,7 @@ private[chisel3] object Converter {
     case slit @ SLit(n, w) =>
       fir.SIntLiteral(n, convert(w))
       val unsigned = if (n < 0) (BigInt(1) << slit.width.get) + n else n
-      val uint = convert(ULit(unsigned, slit.width), ctx, info)
+      val uint = convert(ULit(unsigned, slit.width), ctx)
       fir.DoPrim(firrtl.PrimOps.AsSInt, Seq(uint), Seq.empty, fir.UnknownType)
     // TODO Simplify
     case lit: ILit =>
@@ -100,7 +96,7 @@ private[chisel3] object Converter {
       val consts = e.args.collect { case ILit(i) => i }
       val args = e.args.flatMap {
         case _: ILit => None
-        case other => Some(convert(other, ctx, e.sourceInfo))
+        case other => Some(convert(other, ctx, fir.NoInfo))
       }
       val expr = e.op.name match {
         case "mux" =>
@@ -109,86 +105,87 @@ private[chisel3] object Converter {
         case _ =>
           fir.DoPrim(convert(e.op), args, consts, fir.UnknownType)
       }
-      Some(fir.DefNode(convert(e.sourceInfo), e.name, expr))
-    case e @ DefWire(info, id) =>
-      Some(fir.DefWire(convert(info), e.name, extractType(id, info)))
-    case e @ DefReg(info, id, clock) =>
+      Some(fir.DefNode(fir.NoInfo, e.name, expr))
+    case e @ DefWire(id) =>
+      Some(fir.DefWire(fir.NoInfo, e.name, extractType(id)))
+    case e @ DefReg(id, clock) =>
       Some(
         fir.DefRegister(
-          convert(info),
+          fir.NoInfo,
           e.name,
-          extractType(id, info),
-          convert(clock, ctx, info),
+          extractType(id),
+          convert(clock, ctx),
           firrtl.Utils.zero,
-          convert(getRef(id, info), ctx, info)
+          convert(getRef(id), ctx)
         )
       )
-    case e @ DefRegInit(info, id, clock, reset, init) =>
+    case e @ DefRegInit(id, clock, reset, init) =>
       Some(
         fir.DefRegister(
-          convert(info),
+          fir.NoInfo,
           e.name,
-          extractType(id, info),
-          convert(clock, ctx, info),
-          convert(reset, ctx, info),
-          convert(init, ctx, info)
+          extractType(id),
+          convert(clock, ctx),
+          convert(reset, ctx),
+          convert(init, ctx)
         )
       )
-    case e @ DefMemory(info, id, t, size) =>
-      Some(firrtl.CDefMemory(convert(info), e.name, extractType(t, info), size, false))
-    case e @ DefSeqMemory(info, id, t, size, ruw) =>
-      Some(firrtl.CDefMemory(convert(info), e.name, extractType(t, info), size, true, ruw))
+    case e @ DefMemory(id, t, size) =>
+      Some(firrtl.CDefMemory(fir.NoInfo, e.name, extractType(t), size, false))
+    case e @ DefSeqMemory(id, t, size, ruw) =>
+      Some(firrtl.CDefMemory(fir.NoInfo, e.name, extractType(t), size, true, ruw))
     case e: DefMemPort[_] =>
-      val info = e.sourceInfo
+      val info = fir.NoInfo
       Some(
         firrtl.CDefMPort(
-          convert(e.sourceInfo),
+          fir.NoInfo,
           e.name,
           fir.UnknownType,
           e.source.fullName(ctx),
-          Seq(convert(e.index, ctx, info), convert(e.clock, ctx, info)),
+          Seq(convert(e.index, ctx), convert(e.clock, ctx)),
           convert(e.dir)
         )
       )
-    case Connect(info, loc, exp) =>
-      Some(fir.Connect(convert(info), convert(loc, ctx, info), convert(exp, ctx, info)))
-    case BulkConnect(info, loc, exp) =>
-      Some(fir.PartialConnect(convert(info), convert(loc, ctx, info), convert(exp, ctx, info)))
-    case Attach(info, locs) =>
-      Some(fir.Attach(convert(info), locs.map(l => convert(l, ctx, info))))
-    case DefInvalid(info, arg) =>
-      Some(fir.IsInvalid(convert(info), convert(arg, ctx, info)))
-    case e @ DefInstance(info, id, _) =>
-      Some(fir.DefInstance(convert(info), e.name, id.name))
-    case e @ Printf(_, info, clock, pable) =>
+    case Connect(loc, exp) =>
+      Some(fir.Connect(fir.NoInfo, convert(loc, ctx), convert(exp, ctx)))
+    case BulkConnect(loc, exp) =>
+      Some(fir.PartialConnect(fir.NoInfo, convert(loc, ctx), convert(exp, ctx)))
+    case Attach(locs) =>
+      Some(fir.Attach(fir.NoInfo, locs.map(l => convert(l, ctx))))
+    case DefInvalid(arg) =>
+      Some(fir.IsInvalid(fir.NoInfo, convert(arg, ctx)))
+    case e @ DefInstance(id, _) =>
+      Some(fir.DefInstance(fir.NoInfo, e.name, id.name))
+    case e @ Printf(_, clock, pable) =>
       val (fmt, args) = unpack(pable, ctx)
       Some(
         fir.Print(
-          convert(info),
+          fir.NoInfo,
           fir.StringLit(fmt),
-          args.map(a => convert(a, ctx, info)),
-          convert(clock, ctx, info),
+          args.map(a => convert(a, ctx)),
+          convert(clock, ctx),
           firrtl.Utils.one,
           e.name
         )
       )
-    case e @ Verification(_, op, info, clk, pred, msg) =>
+    case e @ Verification(_, op, clk, pred, msg) =>
       val firOp = op match {
         case Formal.Assert => fir.Formal.Assert
         case Formal.Assume => fir.Formal.Assume
         case Formal.Cover  => fir.Formal.Cover
       }
-      Some(
-        fir.Verification(
-          firOp,
-          convert(info),
-          convert(clk, ctx, info),
-          convert(pred, ctx, info),
-          firrtl.Utils.one,
-          fir.StringLit(msg),
-          e.name
-        )
-      )
+      None
+      // Some(
+      //   fir.Verification(
+      //     firOp,
+      //     fir.NoInfo,
+      //     convert(clk, ctx),
+      //     convert(pred, ctx),
+      //     firrtl.Utils.one,
+      //     fir.StringLit(msg),
+      //     e.name
+      //   )
+      // )
     case _ => None
   }
 
@@ -236,12 +233,12 @@ private[chisel3] object Converter {
         // Please see WhenFrame for more details
         case None =>
           cmd match {
-            case WhenBegin(info, pred) =>
-              val when = fir.Conditionally(convert(info), convert(pred, ctx, info), fir.EmptyStmt, fir.EmptyStmt)
+            case WhenBegin(pred) =>
+              val when = fir.Conditionally(fir.NoInfo, convert(pred, ctx), fir.EmptyStmt, fir.EmptyStmt)
               val frame = WhenFrame(when, stmts, false)
               stmts = new VectorBuilder[fir.Statement]
               scope = frame :: scope
-            case WhenEnd(info, depth, _) =>
+            case WhenEnd(depth, _) =>
               val frame = scope.head
               val when =
                 if (frame.alt) frame.when.copy(alt = fir.Block(stmts.result()))
@@ -258,19 +255,19 @@ private[chisel3] object Converter {
                   // If we're nested we need to add more WhenEnds to ensure each When scope gets
                   // properly closed
                   if (depth > 0) {
-                    nextCmd = WhenEnd(info, depth - 1, false)
+                    nextCmd = WhenEnd(depth - 1, false)
                   }
                   stmts = frame.outer
                   stmts += when
                   scope = scope.tail
               }
-            case OtherwiseEnd(info, depth) =>
+            case OtherwiseEnd(depth) =>
               val frame = scope.head
               val when = frame.when.copy(alt = fir.Block(stmts.result()))
               // TODO For some reason depth == 1 indicates the last closing otherwise whereas
               //  depth == 0 indicates last closing when
               if (depth > 1) {
-                nextCmd = OtherwiseEnd(info, depth - 1)
+                nextCmd = OtherwiseEnd(depth - 1)
               }
               stmts = frame.outer
               stmts += when
@@ -298,9 +295,9 @@ private[chisel3] object Converter {
     case d => d.specifiedDirection
   }
 
-  def extractType(data: Data, info: SourceInfo): fir.Type = extractType(data, false, info)
+  def extractType(data: Data): fir.Type = extractType(data, false)
 
-  def extractType(data: Data, clearDir: Boolean, info: SourceInfo): fir.Type = data match {
+  def extractType(data: Data, clearDir: Boolean): fir.Type = data match {
     case _: Clock      => fir.ClockType
     case _: AsyncReset => fir.AsyncResetType
     case _: ResetType  => fir.ResetType
@@ -311,21 +308,21 @@ private[chisel3] object Converter {
     case d: Vec[_] =>
       val childClearDir = clearDir ||
         d.specifiedDirection == SpecifiedDirection.Input || d.specifiedDirection == SpecifiedDirection.Output
-      fir.VectorType(extractType(d.sample_element, childClearDir, info), d.length)
+      fir.VectorType(extractType(d.sample_element, childClearDir), d.length)
     case d: Record => {
       val childClearDir = clearDir ||
         d.specifiedDirection == SpecifiedDirection.Input || d.specifiedDirection == SpecifiedDirection.Output
       def eltField(elt: Data): fir.Field = (childClearDir, firrtlUserDirOf(elt)) match {
-        case (true, _) => fir.Field(getRef(elt, info).name, fir.Default, extractType(elt, true, info))
+        case (true, _) => fir.Field(getRef(elt).name, fir.Default, extractType(elt, true))
         case (false, SpecifiedDirection.Unspecified | SpecifiedDirection.Output) =>
-          fir.Field(getRef(elt, info).name, fir.Default, extractType(elt, false, info))
+          fir.Field(getRef(elt).name, fir.Default, extractType(elt, false))
         case (false, SpecifiedDirection.Flip | SpecifiedDirection.Input) =>
-          fir.Field(getRef(elt, info).name, fir.Flip, extractType(elt, false, info))
+          fir.Field(getRef(elt).name, fir.Flip, extractType(elt, false))
       }
       if (!d._isOpaqueType)
         fir.BundleType(d.elements.toIndexedSeq.reverse.map { case (_, e) => eltField(e) })
       else
-        extractType(d.elements.head._2, childClearDir, info)
+        extractType(d.elements.head._2, childClearDir)
     }
   }
 
@@ -339,9 +336,9 @@ private[chisel3] object Converter {
       case SpecifiedDirection.Input | SpecifiedDirection.Output     => true
       case SpecifiedDirection.Unspecified | SpecifiedDirection.Flip => false
     }
-    val info = UnlocatableSourceInfo // Unfortunately there is no source locator for ports ATM
-    val tpe = extractType(port.id, clearDir, info)
-    fir.Port(fir.NoInfo, getRef(port.id, info).name, dir, tpe)
+
+    val tpe = extractType(port.id, clearDir)
+    fir.Port(fir.NoInfo, getRef(port.id).name, dir, tpe)
   }
 
   def convert(component: Component): fir.DefModule = component match {

@@ -4,7 +4,6 @@ package chisel3
 
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
-import chisel3.internal.sourceinfo.SourceInfo
 
 /** Prints a message in simulation
   *
@@ -75,21 +74,6 @@ object printf {
     * @param data format string varargs containing data to print
     */
 
-  // Private internal methods that serve to maintain binary
-  // compatibility after interpolator check updates
-  @deprecated("This Printf.apply method has been deprecated and will be removed in Chisel 3.6")
-  def apply(fmt: String, sourceInfo: SourceInfo, compileOptions: CompileOptions): Printf =
-    apply(fmt, Nil, sourceInfo, compileOptions)
-
-  @deprecated("This Printf.apply method has been deprecated and will be removed in Chisel 3.6")
-  def apply(
-    fmt:            String,
-    data:           Seq[Bits],
-    sourceInfo:     SourceInfo,
-    compileOptions: CompileOptions
-  ): Printf =
-    apply(Printable.pack(fmt, data: _*))(sourceInfo, compileOptions)
-
   /** Prints a message in simulation
     *
     * Prints a message every cycle. If defined within the scope of a [[when]] block, the message
@@ -104,17 +88,14 @@ object printf {
     * @see [[Printable]] documentation
     * @param pable [[Printable]] to print
     */
-  def apply(pable: Printable)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Printf =
-    printfWithReset(pable)(sourceInfo, compileOptions)
+  def apply(pable: Printable): Printf =
+    printfWithReset(pable)
 
   private[chisel3] def printfWithReset(
     pable: Printable
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Printf = {
     var printfId: Printf = null
-    when(!Module.reset.asBool) {
+    when(!(Module.reset.asBool)) {
       printfId = printfWithoutReset(pable)
     }
     printfId
@@ -122,24 +103,18 @@ object printf {
 
   private[chisel3] def printfWithoutReset(
     pable: Printable
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Printf = {
     val clock = Builder.forcedClock
     val printfId = new Printf(pable)
 
     Printable.checkScope(pable)
 
-    pushCommand(chisel3.internal.firrtl.Printf(printfId, sourceInfo, clock.ref, pable))
+    pushCommand(chisel3.internal.firrtl.Printf(printfId, clock.ref, pable))
     printfId
   }
   private[chisel3] def printfWithoutReset(
     fmt:  String,
     data: Bits*
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Printf =
     printfWithoutReset(Printable.pack(fmt, data: _*))
 }

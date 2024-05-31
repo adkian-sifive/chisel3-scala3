@@ -5,7 +5,6 @@ package chisel3.internal.firrtl
 import firrtl.{ir => fir}
 import chisel3._
 import chisel3.internal._
-import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.experimental._
 import _root_.firrtl.{ir => firrtlir}
 import _root_.firrtl.{PrimOps, RenameMap}
@@ -294,28 +293,24 @@ object MemPortDirection {
   object INFER extends MemPortDirection("infer")
 }
 
-abstract class Command {
-  def sourceInfo: SourceInfo
-}
+abstract class Command
 abstract class Definition extends Command {
   def id: HasId
   def name: String = id.getRef.name
 }
-case class DefPrim[T <: Data](sourceInfo: SourceInfo, id: T, op: PrimOp, args: Arg*) extends Definition
-case class DefInvalid(sourceInfo: SourceInfo, arg: Arg) extends Command
-case class DefWire(sourceInfo: SourceInfo, id: Data) extends Definition
-case class DefReg(sourceInfo: SourceInfo, id: Data, clock: Arg) extends Definition
-case class DefRegInit(sourceInfo: SourceInfo, id: Data, clock: Arg, reset: Arg, init: Arg) extends Definition
-case class DefMemory(sourceInfo: SourceInfo, id: HasId, t: Data, size: BigInt) extends Definition
+case class DefPrim[T <: Data](id: T, op: PrimOp, args: Arg*) extends Definition
+case class DefInvalid(arg: Arg) extends Command
+case class DefWire(id: Data) extends Definition
+case class DefReg(id: Data, clock: Arg) extends Definition
+case class DefRegInit(id: Data, clock: Arg, reset: Arg, init: Arg) extends Definition
+case class DefMemory(id: HasId, t: Data, size: BigInt) extends Definition
 case class DefSeqMemory(
-  sourceInfo:     SourceInfo,
   id:             HasId,
   t:              Data,
   size:           BigInt,
   readUnderWrite: fir.ReadUnderWrite.Value)
     extends Definition
 case class DefMemPort[T <: Data](
-  sourceInfo: SourceInfo,
   id:         T,
   source:     Node,
   dir:        MemPortDirection,
@@ -323,18 +318,18 @@ case class DefMemPort[T <: Data](
   clock:      Arg)
     extends Definition
 @nowarn("msg=class Port") // delete when Port becomes private
-case class DefInstance(sourceInfo: SourceInfo, id: BaseModule, ports: Seq[Port]) extends Definition
-case class WhenBegin(sourceInfo: SourceInfo, pred: Arg) extends Command
-case class WhenEnd(sourceInfo: SourceInfo, firrtlDepth: Int, hasAlt: Boolean = false) extends Command
-case class AltBegin(sourceInfo: SourceInfo) extends Command
-case class OtherwiseEnd(sourceInfo: SourceInfo, firrtlDepth: Int) extends Command
-case class Connect(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
-case class BulkConnect(sourceInfo: SourceInfo, loc1: Node, loc2: Node) extends Command
-case class Attach(sourceInfo: SourceInfo, locs: Seq[Node]) extends Command
-case class ConnectInit(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
+case class DefInstance(id: BaseModule, ports: Seq[Port]) extends Definition
+case class WhenBegin(pred: Arg) extends Command
+case class WhenEnd(firrtlDepth: Int, hasAlt: Boolean = false) extends Command
+case class AltBegin() extends Command
+case class OtherwiseEnd(firrtlDepth: Int) extends Command
+case class Connect(loc: Node, exp: Arg) extends Command
+case class BulkConnect(loc1: Node, loc2: Node) extends Command
+case class Attach(locs: Seq[Node]) extends Command
+case class ConnectInit(loc: Node, exp: Arg) extends Command
 
 case class Port(id: Data, dir: SpecifiedDirection)
-case class Printf(id: printf.Printf, sourceInfo: SourceInfo, clock: Arg, pable: Printable) extends Definition
+case class Printf(id: printf.Printf, clock: Arg, pable: Printable) extends Definition
 object Formal extends Enumeration {
   val Assert = Value("assert")
   val Assume = Value("assume")

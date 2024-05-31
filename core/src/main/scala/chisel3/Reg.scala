@@ -5,7 +5,6 @@ package chisel3
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.SourceInfo
 
 /** Utility for constructing hardware registers
   *
@@ -32,15 +31,13 @@ object Reg {
     * Value will not change unless the [[Reg]] is given a connection.
     * @param t The template from which to construct this wire
     */
-  def apply[T <: Data](t: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
-    if (compileOptions.declaredTypeMustBeUnbound) {
-      requireIsChiselType(t, "reg type")
-    }
+  def apply[T <: Data](t: T): T = {
+    requireIsChiselType(t, "reg type")
     val reg = t.cloneTypeFull
     val clock = Node(Builder.forcedClock)
 
     reg.bind(RegBinding(Builder.forcedUserModule, Builder.currentWhen))
-    pushCommand(DefReg(sourceInfo, reg, clock))
+    pushCommand(DefReg(reg, clock))
     reg
   }
 
@@ -74,7 +71,7 @@ object Reg {
 object RegNext {
 
   /** Returns a register ''with an unset width'' connected to the signal `next` and with no reset value. */
-  def apply[T <: Data](next: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: Data](next: T): T = {
     val model = (next match {
       case next: Bits => next.cloneTypeWidth(Width())
       case next => next.cloneTypeFull
@@ -88,7 +85,7 @@ object RegNext {
   }
 
   /** Returns a register ''with an unset width'' connected to the signal `next` and with the reset value `init`. */
-  def apply[T <: Data](next: T, init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: Data](next: T, init: T): T = {
     val model = (next match {
       case next: Bits => next.cloneTypeWidth(Width())
       case next => next.cloneTypeFull
@@ -166,24 +163,22 @@ object RegInit {
     * @param t The type template used to construct this [[Reg]]
     * @param init The value the [[Reg]] is initialized to on reset
     */
-  def apply[T <: Data](t: T, init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
-    if (compileOptions.declaredTypeMustBeUnbound) {
-      requireIsChiselType(t, "reg type")
-    }
+  def apply[T <: Data](t: T, init: T): T = {
+    requireIsChiselType(t, "reg type")
     val reg = t.cloneTypeFull
     val clock = Builder.forcedClock
     val reset = Builder.forcedReset
 
     reg.bind(RegBinding(Builder.forcedUserModule, Builder.currentWhen))
     requireIsHardware(init, "reg initializer")
-    pushCommand(DefRegInit(sourceInfo, reg, clock.ref, reset.ref, init.ref))
+    pushCommand(DefRegInit(reg, clock.ref, reset.ref, init.ref))
     reg
   }
 
   /** Construct a [[Reg]] initialized on reset to the specified value.
     * @param init Initial value that serves as a type template and reset value
     */
-  def apply[T <: Data](init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: Data](init: T): T = {
     val model = (init match {
       // If init is a literal without forced width OR any non-literal, let width be inferred
       case init: Bits if !init.litIsForcedWidth.getOrElse(false) => init.cloneTypeWidth(Width())

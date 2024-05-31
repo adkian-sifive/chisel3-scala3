@@ -8,7 +8,6 @@ import chisel3.experimental.BaseModule
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.UnlocatableSourceInfo
 import _root_.firrtl.annotations.{IsModule, ModuleTarget}
 import scala.collection.immutable.VectorBuilder
 
@@ -17,7 +16,7 @@ import scala.collection.immutable.VectorBuilder
   * multiple IO() declarations.
   */
 @nowarn("msg=class Port") // delete when Port becomes private
-abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends BaseModule {
+abstract class RawModule extends BaseModule {
   //
   // RTL construction internals
   //
@@ -34,8 +33,6 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends 
     // _component is defined as a var on BaseModule and we cannot override mutable vars
     _component.get.asInstanceOf[DefModule].commands
   }
-
-  val compileOptions = moduleCompileOptions
 
   // This could be factored into a common utility
   private def canBeNamed(id: HasId): Boolean = id match {
@@ -117,7 +114,7 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions) extends 
     _component
   }
 
-  private[chisel3] def initializeInParent(parentCompileOptions: CompileOptions): Unit = {}
+  private[chisel3] def initializeInParent: Unit = {}
 }
 
 trait RequireAsyncReset extends Module {

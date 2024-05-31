@@ -4,7 +4,6 @@ package chisel3
 
 import chisel3.internal._
 import chisel3.internal.Builder.pushOp
-import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.internal.firrtl._
 import chisel3.internal.firrtl.PrimOp._
 
@@ -25,9 +24,6 @@ object Mux {
     cond: Bool,
     con:  T,
     alt:  T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     requireIsHardware(cond, "mux condition")
     requireIsHardware(con, "mux true value")
@@ -47,6 +43,6 @@ object Mux {
         dcWire.ref
       case _ => alt.ref
     }
-    pushOp(DefPrim(sourceInfo, d, MultiplexOp, cond.ref, conRef, altRef))
+    pushOp(DefPrim(d, MultiplexOp, cond.ref, conRef, altRef))
   }
 }

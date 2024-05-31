@@ -8,7 +8,6 @@ import scala.collection.mutable.{ArrayBuffer, HashMap}
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{SourceInfo, UnlocatableSourceInfo}
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{IsModule, ModuleName, ModuleTarget}
 import _root_.firrtl.AnnotationSeq
@@ -22,11 +21,10 @@ object Module {
     *
     * @return the input module `m` with Chisel metadata properly set
     */
-  def apply[T <: BaseModule](bc: => T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: BaseModule](bc: => T): T = {
     if (Builder.readyForModuleConstr) {
       throwException(
-        "Error: Called Module() twice without instantiating a Module." +
-          sourceInfo.makeMessage(" See " + _)
+        "Error: Called Module() twice without instantiating a Module."
       )
     }
     Builder.readyForModuleConstr = true
@@ -54,8 +52,7 @@ object Module {
     if (Builder.readyForModuleConstr) {
       throwException(
         "Error: attempted to instantiate a Module, but nothing happened. " +
-          "This is probably due to rewrapping a Module instance with Module()." +
-          sourceInfo.makeMessage(" See " + _)
+          "This is probably due to rewrapping a Module instance with Module()."
       )
     }
     Builder.currentModule = parent // Back to parent!
@@ -75,8 +72,8 @@ object Module {
     // We use _component because Modules that don't generate them may still have one
     if (Builder.currentModule.isDefined && module._component.isDefined) {
       val component = module._component.get
-      pushCommand(DefInstance(sourceInfo, module, component.ports))
-      module.initializeInParent(compileOptions)
+      pushCommand(DefInstance(module, component.ports))
+      module.initializeInParent
     }
     module
   }
@@ -92,9 +89,6 @@ object Module {
 
   private[chisel3] def do_pseudo_apply[T <: BaseModule](
     bc: => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     val parent = Builder.currentModule
     val module: T = bc // bc is actually evaluated here
@@ -143,7 +137,7 @@ object Module {
   *
   * @note Module instantiations must be wrapped in a Module() call.
   */
-abstract class Module(implicit moduleCompileOptions: CompileOptions) extends RawModule {
+abstract class Module extends RawModule {
   // Implicit clock and reset pins
   final val clock: Clock = IO(Input(Clock())).suggestName("clock")
   final val reset: Reset = IO(Input(mkReset)).suggestName("reset")
@@ -168,16 +162,7 @@ abstract class Module(implicit moduleCompileOptions: CompileOptions) extends Raw
   private[chisel3] def mkReset: Reset = {
     // Top module and compatibility mode use Bool for reset
     // Note that a Definition elaboration will lack a parent, but still not be a Top module
-    val inferReset = (_parent.isDefined) && moduleCompileOptions.inferModuleReset
-    if (moduleCompileOptions.migrateInferModuleReset && !moduleCompileOptions.inferModuleReset) {
-      this match {
-        case _: RequireSyncReset => // Good! It's been migrated.
-        case _ => // Bad! It hasn't been migrated.
-          Builder.error(
-            s"$desiredName is not inferring its module reset, but has not been marked `RequireSyncReset`. Please extend this trait."
-          )
-      }
-    }
+    val inferReset = (_parent.isDefined)
     if (inferReset) Reset() else Bool()
   }
 
@@ -186,10 +171,9 @@ abstract class Module(implicit moduleCompileOptions: CompileOptions) extends Raw
   Builder.currentReset = Some(reset)
   Builder.clearPrefix()
 
-  private[chisel3] override def initializeInParent(parentCompileOptions: CompileOptions): Unit = {
-    implicit val sourceInfo = UnlocatableSourceInfo
+  private[chisel3] override def initializeInParent(): Unit = {
 
-    super.initializeInParent(parentCompileOptions)
+    super.initializeInParent
     clock := _override_clock.getOrElse(Builder.forcedClock)
     reset := _override_reset.getOrElse(Builder.forcedReset)
   }
@@ -271,7 +255,7 @@ package experimental {
 
     /** Sets up this module in the parent context
       */
-    private[chisel3] def initializeInParent(parentCompileOptions: CompileOptions): Unit
+    private[chisel3] def initializeInParent: Unit
 
     //
     // Chisel Internals

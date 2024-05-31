@@ -9,7 +9,6 @@ import chisel3.experimental.BundleLiterals._
 /** This package contains the main chisel3 API.
   */
 package object chisel3 {
-  import internal.sourceinfo.DeprecatedSourceInfo
   import internal.firrtl.{Port, Width}
   import internal.Builder
 

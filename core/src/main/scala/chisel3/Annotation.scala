@@ -4,7 +4,7 @@ package chisel3.experimental
 
 import scala.language.existentials
 import chisel3.internal.{Builder, InstanceId}
-import chisel3.{CompileOptions, Data, RawModule}
+import chisel3.{Data, RawModule}
 import firrtl.Transform
 import firrtl.annotations._
 import firrtl.options.Unserializable
@@ -91,7 +91,7 @@ object doNotDedup {
     * @param module The module to be marked
     * @return Unmodified signal `module`
     */
-  def apply[T <: RawModule](module: T)(implicit compileOptions: CompileOptions): Unit = {
+  def apply[T <: RawModule](module: T): Unit = {
     annotate(new ChiselAnnotation { def toFirrtl = NoDedupAnnotation(module.toNamed) })
   }
 }

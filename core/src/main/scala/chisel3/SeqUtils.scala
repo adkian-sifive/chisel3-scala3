@@ -3,8 +3,6 @@
 package chisel3
 
 import chisel3.internal.{prefix, throwException}
-
-import chisel3.internal.sourceinfo._
 import chisel3.internal.plugin.autoNameRecursively
 
 private[chisel3] object SeqUtils {
@@ -16,7 +14,7 @@ private[chisel3] object SeqUtils {
     * Equivalent to r(n-1) ## ... ## r(1) ## r(0).
     * @note This returns a `0.U` if applied to a zero-element `Vec`.
     */
-  def asUInt[T <: Bits](in: Seq[T])(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = {
+  def asUInt[T <: Bits](in: Seq[T]): UInt = {
     if (in.isEmpty) {
       0.U
     } else if (in.tail.isEmpty) {
@@ -34,7 +32,7 @@ private[chisel3] object SeqUtils {
 
   /** Outputs the number of elements that === true.B.
     */
-  def count(in: Seq[Bool])(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = in.size match {
+  def count(in: Seq[Bool]): UInt = in.size match {
     case 0 => 0.U
     case 1 => in.head
     case n =>
@@ -46,9 +44,6 @@ private[chisel3] object SeqUtils {
     */
   def priorityMux[T <: Data](
     in: Seq[(Bool, T)]
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     if (in.size == 1) {
       in.head._2
@@ -65,9 +60,6 @@ private[chisel3] object SeqUtils {
     */
   def oneHotMux[T <: Data](
     in: Iterable[(Bool, T)]
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     if (in.tail.isEmpty) {
       in.head._2

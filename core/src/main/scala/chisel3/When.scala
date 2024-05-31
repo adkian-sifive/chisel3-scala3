@@ -5,7 +5,6 @@ package chisel3
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{SourceInfo, UnlocatableSourceInfo}
 
 object when {
 
@@ -30,11 +29,8 @@ object when {
   def apply(
     cond:  => Bool
   )(block: => Any
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): WhenContext = {
-    new WhenContext(sourceInfo, Some(() => cond), block, 0, Nil)
+    new WhenContext(Some(() => cond), block, 0, Nil)
   }
 
   /** Returns the current `when` condition
@@ -52,8 +48,6 @@ object when {
     * }}}
     */
   def cond: Bool = {
-    implicit val compileOptions = ExplicitCompileOptions.Strict
-    implicit val sourceInfo = UnlocatableSourceInfo
     val whens = Builder.whenStack
     whens.foldRight(true.B) {
       case (ctx, acc) => acc && ctx.localCond
@@ -72,7 +66,6 @@ object when {
   *  added by preprocessing the command queue.
   */
 final class WhenContext private[chisel3] (
-  sourceInfo:  SourceInfo,
   cond:        Option[() => Bool],
   block:       => Any,
   firrtlDepth: Int,
@@ -80,17 +73,15 @@ final class WhenContext private[chisel3] (
   altConds: List[() => Bool]) {
 
   @deprecated("Use when(...) { ... }, this should never have been public", "Chisel 3.4.2")
-  def this(sourceInfo: SourceInfo, cond: Option[() => Bool], block: => Any, firrtlDepth: Int = 0) =
-    this(sourceInfo, cond, block, firrtlDepth, Nil)
+  def this(cond: Option[() => Bool], block: => Any, firrtlDepth: Int = 0) =
+    this(cond, block, firrtlDepth, Nil)
 
   private var scopeOpen = false
 
   /** Returns the local condition, inverted for an otherwise */
   private[chisel3] def localCond: Bool = {
-    implicit val compileOptions = ExplicitCompileOptions.Strict
-    implicit val sourceInfo = UnlocatableSourceInfo
     val alt = altConds.foldRight(true.B) {
-      case (c, acc) => acc & !c()
+      case (c, acc) => acc & !(c())
     }
     cond
       .map(alt && _())
@@ -106,11 +97,8 @@ final class WhenContext private[chisel3] (
   def elsewhen(
     elseCond: => Bool
   )(block:    => Any
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): WhenContext = {
-    new WhenContext(sourceInfo, Some(() => elseCond), block, firrtlDepth + 1, cond ++: altConds)
+    new WhenContext(Some(() => elseCond), block, firrtlDepth + 1, cond ++: altConds)
   }
 
   /** This block of logic gets executed only if the above conditions
@@ -120,8 +108,8 @@ final class WhenContext private[chisel3] (
     * assignment of the Bool node of the predicate in the correct
     * place.
     */
-  def otherwise(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Unit =
-    new WhenContext(sourceInfo, None, block, firrtlDepth + 1, cond ++: altConds)
+  def otherwise(block: => Any): Unit =
+    new WhenContext(None, block, firrtlDepth + 1, cond ++: altConds)
 
   def active: Boolean = scopeOpen
 
@@ -134,8 +122,8 @@ final class WhenContext private[chisel3] (
   /*
    *
    */
-  if (firrtlDepth > 0) { pushCommand(AltBegin(sourceInfo)) }
-  cond.foreach(c => pushCommand(WhenBegin(sourceInfo, c().ref)))
+  if (firrtlDepth > 0) { pushCommand(AltBegin()) }
+  cond.foreach(c => pushCommand(WhenBegin(c().ref)))
   Builder.pushWhen(this)
   try {
     scopeOpen = true
@@ -149,6 +137,6 @@ final class WhenContext private[chisel3] (
   }
   scopeOpen = false
   Builder.popWhen()
-  cond.foreach(_ => pushCommand(WhenEnd(sourceInfo, firrtlDepth)))
-  if (cond.isEmpty) { pushCommand(OtherwiseEnd(sourceInfo, firrtlDepth)) }
+  cond.foreach(_ => pushCommand(WhenEnd(firrtlDepth)))
+  if (cond.isEmpty) { pushCommand(OtherwiseEnd(firrtlDepth)) }
 }

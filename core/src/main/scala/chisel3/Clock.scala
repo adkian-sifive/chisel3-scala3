@@ -4,7 +4,6 @@ package chisel3
 
 import chisel3.internal.Builder.pushOp
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo._
 import chisel3.internal.firrtl.PrimOp.AsUIntOp
 
 object Clock {
@@ -20,10 +19,10 @@ sealed class Clock(private[chisel3] val width: Width = Width(1)) extends Element
   private[chisel3] def typeEquivalent(that: Data): Boolean =
     this.getClass == that.getClass
 
-  override def connect(that: Data)(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): Unit =
+  override def connect(that: Data): Unit =
     that match {
-      case _: Clock | DontCare => super.connect(that)(sourceInfo, connectCompileOptions)
-      case _ => super.badConnect(that)(sourceInfo)
+      case _: Clock | DontCare => super.connect(that)
+      case _ => super.badConnect(that)
     }
 
   override def litOption: Option[BigInt] = None
@@ -36,16 +35,13 @@ sealed class Clock(private[chisel3] val width: Width = Width(1)) extends Element
     "Calling this function with an empty argument list is invalid in Scala 3. Use the form without parentheses instead",
     "Chisel 3.5"
   )
-  def asBool(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = this.asUInt.asBool
+  def asBool: Bool = this.asUInt.asBool
 
-  override def asUInt(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): UInt = pushOp(
-    DefPrim(sourceInfo, UInt(this.width), AsUIntOp, ref)
+  override def asUInt: UInt = pushOp(
+    DefPrim(UInt(this.width), AsUIntOp, ref)
   )
   private[chisel3] override def connectFromBits(
     that: Bits
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Unit = {
     this := that.asBool.asClock
   }

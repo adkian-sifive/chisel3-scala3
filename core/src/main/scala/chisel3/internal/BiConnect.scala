@@ -7,8 +7,6 @@ import chisel3.experimental.{attach, Analog, BaseModule}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
 
-import scala.language.experimental.macros
-import chisel3.internal.sourceinfo._
 import _root_.firrtl.passes.CheckTypes
 
 /**
@@ -44,8 +42,8 @@ private[chisel3] object BiConnect {
     BiConnectException(s": Right Record missing field ($field).")
   def MismatchedException(left: String, right: String) =
     BiConnectException(s": Left ($left) and Right ($right) have different types.")
-  def AttachAlreadyBulkConnectedException(sourceInfo: SourceInfo) =
-    BiConnectException(sourceInfo.makeMessage(": Analog previously bulk connected at " + _))
+  def AttachAlreadyBulkConnectedException =
+    BiConnectException("Analog previously bulk connected")
   def DontCareCantBeSink =
     BiConnectException(": DontCare cannot be a connection sink (LHS)")
 
@@ -74,8 +72,6 @@ private[chisel3] object BiConnect {
     * - 4 is a special case of 2 turning into 3 for some subfields, when either side's subfield at `extends Bundle/Record` has `emitStrictConnects = false`
     */
   def connect(
-    sourceInfo:            SourceInfo,
-    connectCompileOptions: CompileOptions,
     left:                  Data,
     right:                 Data,
     context_mod:           BaseModule
@@ -84,22 +80,22 @@ private[chisel3] object BiConnect {
       // Handle element case (root case)
       case (left_a: Analog, right_a: Analog) =>
         try {
-          markAnalogConnected(sourceInfo, left_a, context_mod)
-          markAnalogConnected(sourceInfo, right_a, context_mod)
+          markAnalogConnected(left_a, context_mod)
+          markAnalogConnected(right_a, context_mod)
         } catch { // convert attach exceptions to BiConnectExceptions
           case attach.AttachException(message) => throw BiConnectException(message)
         }
-        attach.impl(Seq(left_a, right_a), context_mod)(sourceInfo)
+        attach.impl(Seq(left_a, right_a), context_mod)
       case (left_a: Analog, DontCare) =>
         try {
-          markAnalogConnected(sourceInfo, left_a, context_mod)
+          markAnalogConnected(left_a, context_mod)
         } catch { // convert attach exceptions to BiConnectExceptions
           case attach.AttachException(message) => throw BiConnectException(message)
         }
-        pushCommand(DefInvalid(sourceInfo, left_a.lref))
-      case (DontCare, right_a: Analog) => connect(sourceInfo, connectCompileOptions, right, left, context_mod)
+        pushCommand(DefInvalid(left_a.lref))
+      case (DontCare, right_a: Analog) => connect(right, left, context_mod)
       case (left_e: Element, right_e: Element) => {
-        elemConnect(sourceInfo, connectCompileOptions, left_e, right_e, context_mod)
+        elemConnect(left_e, right_e, context_mod)
         // TODO(twigg): Verify the element-level classes are connectable
       }
       // Handle Vec case
@@ -110,8 +106,7 @@ private[chisel3] object BiConnect {
 
         for (idx <- 0 until left_v.length) {
           try {
-            implicit val compileOptions = connectCompileOptions
-            connect(sourceInfo, connectCompileOptions, left_v(idx), right_v(idx), context_mod)
+            connect(left_v(idx), right_v(idx), context_mod)
           } catch {
             case BiConnectException(message) => throw BiConnectException(s"($idx)$message")
           }
@@ -121,8 +116,7 @@ private[chisel3] object BiConnect {
       case (left_v: Vec[Data @unchecked], DontCare) => {
         for (idx <- 0 until left_v.length) {
           try {
-            implicit val compileOptions = connectCompileOptions
-            connect(sourceInfo, connectCompileOptions, left_v(idx), right, context_mod)
+            connect(left_v(idx), right, context_mod)
           } catch {
             case BiConnectException(message) => throw BiConnectException(s"($idx)$message")
           }
@@ -132,8 +126,7 @@ private[chisel3] object BiConnect {
       case (DontCare, right_v: Vec[Data @unchecked]) => {
         for (idx <- 0 until right_v.length) {
           try {
-            implicit val compileOptions = connectCompileOptions
-            connect(sourceInfo, connectCompileOptions, left, right_v(idx), context_mod)
+            connect(left, right_v(idx), context_mod)
           } catch {
             case BiConnectException(message) => throw BiConnectException(s"($idx)$message")
           }
@@ -142,41 +135,32 @@ private[chisel3] object BiConnect {
       // Handle Records defined in Chisel._ code by emitting a FIRRTL bulk
       // connect when possible and a partial connect otherwise
       case pair @ (left_r: Record, right_r: Record) =>
-        val emitStrictConnects: Boolean =
-          left_r.compileOptions.emitStrictConnects && right_r.compileOptions.emitStrictConnects
+        val emitStrictConnects: Boolean = true
 
         // chisel3 <> is commutative but FIRRTL <- is not
         val flipConnection =
           !MonoConnect.canBeSink(left_r, context_mod) || !MonoConnect.canBeSource(right_r, context_mod)
         val (newLeft, newRight) = if (flipConnection) (right_r, left_r) else (left_r, right_r)
 
-        recordConnect(sourceInfo, connectCompileOptions, left_r, right_r, context_mod)
+        recordConnect(left_r, right_r, context_mod)
 
       // Handle Records connected to DontCare
       case (left_r: Record, DontCare) =>
-        if (!left_r.compileOptions.emitStrictConnects) {
-          left.legacyConnect(right)(sourceInfo)
-        } else {
-          // For each field in left, descend with right
-          for ((field, left_sub) <- left_r.elements) {
-            try {
-              connect(sourceInfo, connectCompileOptions, left_sub, right, context_mod)
-            } catch {
-              case BiConnectException(message) => throw BiConnectException(s".$field$message")
-            }
+        // For each field in left, descend with right
+        for ((field, left_sub) <- left_r.elements) {
+          try {
+            connect(left_sub, right, context_mod)
+          } catch {
+            case BiConnectException(message) => throw BiConnectException(s".$field$message")
           }
         }
       case (DontCare, right_r: Record) =>
-        if (!right_r.compileOptions.emitStrictConnects) {
-          left.legacyConnect(right)(sourceInfo)
-        } else {
-          // For each field in left, descend with right
-          for ((field, right_sub) <- right_r.elements) {
-            try {
-              connect(sourceInfo, connectCompileOptions, left, right_sub, context_mod)
-            } catch {
-              case BiConnectException(message) => throw BiConnectException(s".$field$message")
-            }
+        // For each field in left, descend with right
+        for ((field, right_sub) <- right_r.elements) {
+          try {
+            connect(left, right_sub, context_mod)
+          } catch {
+            case BiConnectException(message) => throw BiConnectException(s".$field$message")
           }
         }
 
@@ -187,8 +171,6 @@ private[chisel3] object BiConnect {
 
   // Do connection of two Records
   def recordConnect(
-    sourceInfo:            SourceInfo,
-    connectCompileOptions: CompileOptions,
     left_r:                Record,
     right_r:               Record,
     context_mod:           BaseModule
@@ -197,23 +179,17 @@ private[chisel3] object BiConnect {
 
     // For each field in left, descend with right.
     // Don't bother doing this check if we don't expect it to necessarily pass.
-    if (connectCompileOptions.connectFieldsMustMatch) {
-      for ((field, right_sub) <- right_r.elements) {
-        if (!left_r.elements.isDefinedAt(field)) {
-          throw MissingLeftFieldException(field)
-        }
+    for ((field, right_sub) <- right_r.elements) {
+      if (!left_r.elements.isDefinedAt(field)) {
+        throw MissingLeftFieldException(field)
       }
     }
     // For each field in left, descend with right
     for ((field, left_sub) <- left_r.elements) {
       try {
         right_r.elements.get(field) match {
-          case Some(right_sub) => connect(sourceInfo, connectCompileOptions, left_sub, right_sub, context_mod)
-          case None => {
-            if (connectCompileOptions.connectFieldsMustMatch) {
-              throw MissingRightFieldException(field)
-            }
-          }
+          case Some(right_sub) => connect(left_sub, right_sub, context_mod)
+          case None => throw MissingRightFieldException(field)
         }
       } catch {
         case BiConnectException(message) => throw BiConnectException(s".$field$message")
@@ -235,22 +211,18 @@ private[chisel3] object BiConnect {
   private[chisel3] def canBulkConnectAggregates(
     sink:                  Aggregate,
     source:                Aggregate,
-    sourceInfo:            SourceInfo,
-    connectCompileOptions: CompileOptions,
     context_mod:           BaseModule
   ): Boolean = {
 
     // check that the aggregates have the same types
     def typeCheck = CheckTypes.validConnect(
-      Converter.extractType(sink, sourceInfo),
-      Converter.extractType(source, sourceInfo)
+      Converter.extractType(sink),
+      Converter.extractType(source)
     )
 
     // check records live in appropriate contexts
     def contextCheck =
       MonoConnect.aggregateConnectContextCheck(
-        sourceInfo,
-        connectCompileOptions,
         sink,
         source,
         context_mod
@@ -276,33 +248,31 @@ private[chisel3] object BiConnect {
 
   // These functions (finally) issue the connection operation
   // Issue with right as sink, left as source
-  private def issueConnectL2R(left: Element, right: Element)(implicit sourceInfo: SourceInfo): Unit = {
+  private def issueConnectL2R(left: Element, right: Element): Unit = {
     // Source and sink are ambiguous in the case of a Bi/Bulk Connect (<>).
     // If either is a DontCareBinding, just issue a DefInvalid for the other,
     //  otherwise, issue a Connect.
     (left.topBinding, right.topBinding) match {
-      case (lb: DontCareBinding, _) => pushCommand(DefInvalid(sourceInfo, right.lref))
-      case (_, rb: DontCareBinding) => pushCommand(DefInvalid(sourceInfo, left.lref))
-      case (_, _) => pushCommand(Connect(sourceInfo, right.lref, left.ref))
+      case (lb: DontCareBinding, _) => pushCommand(DefInvalid(right.lref))
+      case (_, rb: DontCareBinding) => pushCommand(DefInvalid(left.lref))
+      case (_, _) => pushCommand(Connect(right.lref, left.ref))
     }
   }
   // Issue with left as sink, right as source
-  private def issueConnectR2L(left: Element, right: Element)(implicit sourceInfo: SourceInfo): Unit = {
+  private def issueConnectR2L(left: Element, right: Element): Unit = {
     // Source and sink are ambiguous in the case of a Bi/Bulk Connect (<>).
     // If either is a DontCareBinding, just issue a DefInvalid for the other,
     //  otherwise, issue a Connect.
     (left.topBinding, right.topBinding) match {
-      case (lb: DontCareBinding, _) => pushCommand(DefInvalid(sourceInfo, right.lref))
-      case (_, rb: DontCareBinding) => pushCommand(DefInvalid(sourceInfo, left.lref))
-      case (_, _) => pushCommand(Connect(sourceInfo, left.lref, right.ref))
+      case (lb: DontCareBinding, _) => pushCommand(DefInvalid(right.lref))
+      case (_, rb: DontCareBinding) => pushCommand(DefInvalid(left.lref))
+      case (_, _) => pushCommand(Connect(left.lref, right.ref))
     }
   }
 
   // This function checks if element-level connection operation allowed.
   // Then it either issues it or throws the appropriate exception.
   def elemConnect(
-    implicit sourceInfo:   SourceInfo,
-    connectCompileOptions: CompileOptions,
     _left:                 Element,
     _right:                Element,
     context_mod:           BaseModule
@@ -369,13 +339,7 @@ private[chisel3] object BiConnect {
 
         case (Input, Input)   => throw BothDriversException
         case (Output, Output) => throw BothDriversException
-        case (Internal, Internal) => {
-          if (connectCompileOptions.dontAssumeDirectionality) {
-            throw UnknownDriverException
-          } else {
-            issueConnectR2L(left, right)
-          }
-        }
+        case (Internal, Internal) => throw UnknownDriverException
       }
     }
 
@@ -391,18 +355,8 @@ private[chisel3] object BiConnect {
 
         case (Input, Input)   => throw NeitherDriverException
         case (Output, Output) => throw BothDriversException
-        case (_, Internal) =>
-          if (connectCompileOptions.dontAssumeDirectionality) {
-            throw UnknownRelationException
-          } else {
-            issueConnectR2L(left, right)
-          }
-        case (Internal, _) =>
-          if (connectCompileOptions.dontAssumeDirectionality) {
-            throw UnknownRelationException
-          } else {
-            issueConnectR2L(left, right)
-          }
+        case (_, Internal) => throw UnknownRelationException
+        case (Internal, _) => throw UnknownRelationException
       }
     }
 
@@ -412,12 +366,10 @@ private[chisel3] object BiConnect {
   }
 
   // This function checks if analog element-level attaching is allowed, then marks the Analog as connected
-  def markAnalogConnected(implicit sourceInfo: SourceInfo, analog: Analog, contextModule: BaseModule): Unit = {
+  def markAnalogConnected(analog: Analog, contextModule: BaseModule): Unit = {
     analog.biConnectLocs.get(contextModule) match {
-      case Some(sl) => throw AttachAlreadyBulkConnectedException(sl)
+      case Some(sl) => throw AttachAlreadyBulkConnectedException
       case None     => // Do nothing
     }
-    // Mark bulk connected
-    analog.biConnectLocs(contextModule) = sourceInfo
   }
 }

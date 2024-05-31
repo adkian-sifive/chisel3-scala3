@@ -6,7 +6,6 @@ import chisel3.experimental.{Analog, BaseModule, DataMirror}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal._
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{SourceInfo, UnlocatableSourceInfo}
 
 import scala.collection.immutable.LazyList // Needed for 2.12 alias
 import scala.reflect.ClassTag
@@ -54,12 +53,7 @@ object SpecifiedDirection {
   private[chisel3] def specifiedDirection[T <: Data](
     source: T
   )(dir:    SpecifiedDirection
-  )(
-    implicit compileOptions: CompileOptions
   ): T = {
-    if (compileOptions.checkSynthesizable) {
-      requireIsChiselType(source)
-    }
     val out = source.cloneType.asInstanceOf[T]
     out.specifiedDirection = dir
     out
@@ -294,9 +288,6 @@ private[chisel3] object cloneSupertype {
   def apply[T <: Data](
     elts:        Seq[T],
     createdType: String
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     require(!elts.isEmpty, s"can't create $createdType with no inputs")
 
@@ -417,18 +408,18 @@ object chiselTypeOf {
   * Thus, an error will be thrown if these are used on bound Data
   */
 object Input {
-  def apply[T <: Data](source: T)(implicit compileOptions: CompileOptions): T = {
+  def apply[T <: Data](source: T): T = {
     SpecifiedDirection.specifiedDirection(source)(SpecifiedDirection.Input)
   }
 }
 object Output {
-  def apply[T <: Data](source: T)(implicit compileOptions: CompileOptions): T = {
+  def apply[T <: Data](source: T): T = {
     SpecifiedDirection.specifiedDirection(source)(SpecifiedDirection.Output)
   }
 }
 
 object Flipped {
-  def apply[T <: Data](source: T)(implicit compileOptions: CompileOptions): T = {
+  def apply[T <: Data](source: T): T = {
     SpecifiedDirection.specifiedDirection(source)(SpecifiedDirection.flip(source.specifiedDirection))
   }
 }
@@ -468,7 +459,7 @@ abstract class Data extends HasId with NamedComponent {
     if (_specifiedDirection != SpecifiedDirection.Unspecified) {
       this match {
         // Anything flies in compatibility mode
-        case t: Record if !t.compileOptions.dontAssumeDirectionality =>
+        case t: Record  =>
         case _ => throw RebindingException(s"Attempted reassignment of user-specified direction to $this")
       }
     }
@@ -586,64 +577,46 @@ abstract class Data extends HasId with NamedComponent {
   // TODO: refactor away this, this is outside the scope of Data
   private[chisel3] def allElements: Seq[Element]
 
-  private[chisel3] def badConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit =
+  private[chisel3] def badConnect(that: Data): Unit =
     throwException(s"cannot connect ${this} and ${that}")
 
   private[chisel3] def connect(
     that: Data
-  )(
-    implicit sourceInfo:   SourceInfo,
-    connectCompileOptions: CompileOptions
   ): Unit = {
-    if (connectCompileOptions.checkSynthesizable) {
-      requireIsHardware(this, "data to be connected")
-      requireIsHardware(that, "data to be connected")
-      this.topBinding match {
-        case _: ReadOnlyBinding => throwException(s"Cannot reassign to read-only $this")
-        case _ => // fine
-      }
+    requireIsHardware(this, "data to be connected")
+    requireIsHardware(that, "data to be connected")
+    this.topBinding match {
+      case _: ReadOnlyBinding => throwException(s"Cannot reassign to read-only $this")
+      case _ => // fine
     }
-    if (connectCompileOptions.emitStrictConnects) {
-
-      try {
-        MonoConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.currentModule.get)
-      } catch {
-        case MonoConnectException(message) =>
-          throwException(
-            s"Connection between sink ($this) and source ($that) failed @: $message"
-          )
-      }
-    } else {
-      this.legacyConnect(that)
+    try {
+      MonoConnect.connect(this, that, Builder.currentModule.get)
+    } catch {
+      case MonoConnectException(message) =>
+        throwException(
+          s"Connection between sink ($this) and source ($that) failed @: $message"
+        )
     }
   }
+
   private[chisel3] def bulkConnect(
     that: Data
-  )(
-    implicit sourceInfo:   SourceInfo,
-    connectCompileOptions: CompileOptions
   ): Unit = {
-    if (connectCompileOptions.checkSynthesizable) {
-      requireIsHardware(this, s"data to be bulk-connected")
-      requireIsHardware(that, s"data to be bulk-connected")
+    requireIsHardware(this, s"data to be bulk-connected")
+    requireIsHardware(that, s"data to be bulk-connected")
       (this.topBinding, that.topBinding) match {
-        case (_: ReadOnlyBinding, _: ReadOnlyBinding) => throwException(s"Both $this and $that are read-only")
-        // DontCare cannot be a sink (LHS)
-        case (_: DontCareBinding, _) => throw BiConnect.DontCareCantBeSink
-        case _ => // fine
-      }
+      case (_: ReadOnlyBinding, _: ReadOnlyBinding) => throwException(s"Both $this and $that are read-only")
+      // DontCare cannot be a sink (LHS)
+      case (_: DontCareBinding, _) => throw BiConnect.DontCareCantBeSink
+      case _ => // fine
     }
-    if (connectCompileOptions.emitStrictConnects) {
-      try {
-        BiConnect.connect(sourceInfo, connectCompileOptions, this, that, Builder.currentModule.get)
-      } catch {
-        case BiConnectException(message) =>
-          throwException(
-            s"Connection between left ($this) and source ($that) failed @$message"
-          )
-      }
-    } else {
-      this.legacyConnect(that)
+    try {
+      BiConnect.connect(this, that, Builder.currentModule.get)
+    } catch {
+      case BiConnectException(message) =>
+        throwException(
+          s"Connection between left ($this) and source ($that) failed @$message"
+        )
     }
   }
 
@@ -683,8 +656,6 @@ abstract class Data extends HasId with NamedComponent {
   private[chisel3] final def ref: Arg = {
     def materializeWire(): Arg = {
       if (!Builder.currentModule.isDefined) throwException(s"internal error: cannot materialize ref for $this")
-      implicit val compileOptions = ExplicitCompileOptions.Strict
-      implicit val sourceInfo = UnlocatableSourceInfo
       WireDefault(this).ref
     }
     requireIsHardware(this)
@@ -729,7 +700,7 @@ abstract class Data extends HasId with NamedComponent {
   }
 
   private[chisel3] def width: Width
-  private[chisel3] def legacyConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit
+  private[chisel3] def legacyConnect(that: Data): Unit
 
   /** Internal API; Chisel users should look at chisel3.chiselTypeOf(...).
     *
@@ -759,9 +730,9 @@ abstract class Data extends HasId with NamedComponent {
     * @param that the $coll to connect to
     * @group Connect
     */
-  final def :=(that: => Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = {
+  final def :=(that: => Data): Unit = {
     prefix(this) {
-      this.connect(that)(sourceInfo, connectionCompileOptions)
+      this.connect(that)
     }
   }
 
@@ -772,9 +743,9 @@ abstract class Data extends HasId with NamedComponent {
     * @param that the $coll to connect to
     * @group Connect
     */
-  final def <>(that: => Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = {
+  final def <>(that: => Data): Unit = {
     prefix(this) {
-      this.bulkConnect(that)(sourceInfo, connectionCompileOptions)
+      this.bulkConnect(that)
     }
   }
 
@@ -827,7 +798,7 @@ abstract class Data extends HasId with NamedComponent {
     * @note bit widths are NOT checked, may pad or drop bits from input
     * @note that should have known widths
     */
-  def asTypeOf[T <: Data](that: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def asTypeOf[T <: Data](that: T): T = {
     val thatCloned = Wire(that.cloneTypeFull)
     thatCloned.connectFromBits(this.asUInt)
     thatCloned
@@ -837,9 +808,6 @@ abstract class Data extends HasId with NamedComponent {
     */
   private[chisel3] def connectFromBits(
     that: Bits
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Unit
 
   /** Reinterpret cast to UInt.
@@ -853,7 +821,7 @@ abstract class Data extends HasId with NamedComponent {
     "Calling this function with an empty argument list is invalid in Scala 3. Use the form without parentheses instead",
     "Chisel 3.5"
   )
-  def asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt
+  def asUInt: UInt
 
   /** Default pretty printing */
   def toPrintable: Printable
@@ -874,7 +842,7 @@ object Data {
     *
     * @param lhs The [[Data]] hardware on the left-hand side of the equality
     */
-  implicit class DataEquality[T <: Data](lhs: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions) {
+  implicit class DataEquality[T <: Data](lhs: T) {
 
     /** Dynamic recursive equality operator for generic [[Data]]
       *
@@ -940,20 +908,13 @@ trait WireFactory {
   /** Construct a [[Wire]] from a type template
     * @param t The template from which to construct this wire
     */
-  def apply[T <: Data](t: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
-    if (compileOptions.declaredTypeMustBeUnbound) {
-      requireIsChiselType(t, "wire type")
-    }
+  def apply[T <: Data](t: T): T = {
     val x = t.cloneTypeFull
 
     // Bind each element of x to being a Wire
     x.bind(WireBinding(Builder.forcedUserModule, Builder.currentWhen))
 
-    pushCommand(DefWire(sourceInfo, x))
-    if (!compileOptions.explicitInvalidate) {
-      pushCommand(DefInvalid(sourceInfo, x.ref))
-    }
-
+    pushCommand(DefWire(x))
     x
   }
 }
@@ -1043,9 +1004,6 @@ object WireDefault {
   private def applyImpl[T <: Data](
     t:    T,
     init: Data
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     val x = Wire(t)
     requireIsHardware(init, "wire initializer")
@@ -1061,9 +1019,6 @@ object WireDefault {
   def apply[T <: Data](
     t:    T,
     init: DontCare.type
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): T = {
     applyImpl(t, init)
   }
@@ -1072,14 +1027,14 @@ object WireDefault {
     * @param t The type template used to construct this [[Wire]]
     * @param init The hardware value that will serve as the default value
     */
-  def apply[T <: Data](t: T, init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: Data](t: T, init: T): T = {
     applyImpl(t, init)
   }
 
   /** Construct a [[Wire]] with a default connection
     * @param init The hardware value that will serve as a type template and default value
     */
-  def apply[T <: Data](init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
+  def apply[T <: Data](init: T): T = {
     val model = (init match {
       // If init is a literal without forced width OR any non-literal, let width be inferred
       case init: Bits if !init.litIsForcedWidth.getOrElse(false) => init.cloneTypeWidth(Width())
@@ -1110,14 +1065,11 @@ final case object DontCare extends Element {
 
   private[chisel3] def connectFromBits(
     that: Bits
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Unit = {
     Builder.error("connectFromBits: DontCare cannot be a connection sink (LHS)")
   }
 
-  def do_asUInt(implicit sourceInfo: chisel3.internal.sourceinfo.SourceInfo, compileOptions: CompileOptions): UInt = {
+  def do_asUInt: UInt = {
     Builder.error("DontCare does not have a UInt representation")
     0.U
   }

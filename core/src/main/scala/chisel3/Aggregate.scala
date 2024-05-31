@@ -10,7 +10,6 @@ import chisel3.experimental.{BaseModule, BundleLiteralException, OpaqueType, Vec
 import chisel3.internal._
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo._
 
 import java.lang.Math.{floor, log10, pow}
 import scala.collection.mutable
@@ -57,25 +56,12 @@ sealed abstract class Aggregate extends Data {
 
   private[chisel3] def width: Width = elementsIterator.map(_.width).foldLeft(0.W)(_ + _)
 
-  private[chisel3] def legacyConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit = {
-    // If the source is a DontCare, generate a DefInvalid for the sink,
-    //  otherwise, issue a Connect.
-    if (that == DontCare) {
-      pushCommand(DefInvalid(sourceInfo, Node(this)))
-    } else {
-      pushCommand(BulkConnect(sourceInfo, Node(this), Node(that)))
-    }
-  }
-
-  override def asUInt(using sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt = {
+  override def asUInt: UInt = {
     SeqUtils.asUInt(flatten.map(_.asUInt))
   }
 
   private[chisel3] override def connectFromBits(
     that: Bits
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Unit = {
     var i = 0
     val bits = if (that.isLit) that else WireDefault(UInt(this.width), that) // handles width padding
@@ -95,15 +81,11 @@ sealed abstract class Aggregate extends Data {
 }
 
 object Vec {
-
   /** Creates a new [[Vec]] with `n` entries of the specified data type.
     *
     * @note elements are NOT assigned by default and have no value
     */
-  def apply[T <: Data](n: Int, gen: T)(using sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
-    if (compileOptions.declaredTypeMustBeUnbound) {
-      requireIsChiselType(gen, "vec type")
-    }
+  def apply[T <: Data](n: Int, gen: T): Vec[T] = {
     new Vec(gen.cloneTypeFull, n)
   }
 
@@ -146,7 +128,7 @@ object Vec {
   *  - when multiple conflicting assignments are performed on a Vec element, the last one takes effect (unlike Mem, where the result is undefined)
   *  - Vecs, unlike classes in Scala's collection library, are propagated intact to FIRRTL as a vector type, which may make debugging easier
   */
-sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extends Aggregate {
+sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extends Aggregate with Iterator[T] {
 
   override def toString: String = {
     topBindingOpt match {
@@ -212,7 +194,7 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
     *
     * @note the length of this Vec must match the length of the input Seq
     */
-  def <>(that: Seq[T])(implicit sourceInfo: SourceInfo, moduleCompileOptions: CompileOptions): Unit = {
+  def <>(that: Seq[T]): Unit = {
     if (this.length != that.length) {
       Builder.error("Vec and Seq being bulk connected have different lengths!")
     }
@@ -221,14 +203,14 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
   }
 
   // TODO: eliminate once assign(Seq) isn't ambiguous with assign(Data) since Vec extends Seq and Data
-  def <>(that: Vec[T])(implicit sourceInfo: SourceInfo, moduleCompileOptions: CompileOptions): Unit =
+  def <>(that: Vec[T]): Unit =
     this.bulkConnect(that.asInstanceOf[Data])
 
   /** Strong bulk connect, assigning elements in this Vec from elements in a Seq.
     *
     * @note the length of this Vec must match the length of the input Seq
     */
-  def :=(that: Seq[T])(implicit sourceInfo: SourceInfo, moduleCompileOptions: CompileOptions): Unit = {
+  def :=(that: Seq[T]): Unit = {
     require(
       this.length == that.length,
       s"Cannot assign to a Vec of length ${this.length} from a Seq of different length ${that.length}"
@@ -238,11 +220,11 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
   }
 
   // TODO: eliminate once assign(Seq) isn't ambiguous with assign(Data) since Vec extends Seq and Data
-  def :=(that: Vec[T])(implicit sourceInfo: SourceInfo, moduleCompileOptions: CompileOptions): Unit = this.connect(that)
+  def :=(that: Vec[T]): Unit = this.connect(that)
 
   /** Creates a dynamically indexed read or write accessor into the array.
     */
-  def apply(p: UInt)(implicit compileOptions: CompileOptions): T = {
+  def apply(p: UInt): T = {
     requireIsHardware(this, "vec")
     requireIsHardware(p, "vec index")
 
@@ -263,7 +245,7 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
     // Perhaps there's a cleaner way of accomplishing this...
     port.bind(ChildBinding(this), reconstructedResolvedDirection)
 
-    val i = Vec.truncateIndex(p, length)(UnlocatableSourceInfo, compileOptions)
+    val i = Vec.truncateIndex(p, length)
     port.setRef(this, i)
 
     port
@@ -292,55 +274,6 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
     PString("Vec(") + Printables(elts) + PString(")")
   }
 
-  /** A reduce operation in a tree like structure instead of sequentially
-    * @example An adder tree
-    * {{{
-    * val sumOut = inputNums.reduceTree((a: T, b: T) => (a + b))
-    * }}}
-    */
-  /** A reduce operation in a tree like structure instead of sequentially
-    * @example A pipelined adder tree
-    * {{{
-    * val sumOut = inputNums.reduceTree(
-    *   (a: T, b: T) => RegNext(a + b),
-    *   (a: T) => RegNext(a)
-    * )
-    * }}}
-    */
-  def reduceTree(
-    redOp:   (T, T) => T,
-    layerOp: (T) => T = (x: T) => x
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
-  ): T = {
-    require(!isEmpty, "Cannot apply reduction on a vec of size 0")
-
-    def recReduce[T](s: Seq[T], op: (T, T) => T, lop: (T) => T): T = {
-
-      val n = s.length
-      n match {
-        case 1 => lop(s(0))
-        case 2 => op(s(0), s(1))
-        case _ =>
-          val m = pow(2, floor(log10(n - 1) / log10(2))).toInt // number of nodes in next level, will be a power of 2
-          val p = 2 * m - n // number of nodes promoted
-
-          val l = s.take(p).map(lop)
-          val r = s
-            .drop(p)
-            .grouped(2)
-            .map {
-              case Seq(a, b) => op(a, b)
-            }
-            .toVector
-          recReduce(l ++ r, op, lop)
-      }
-    }
-
-    recReduce(this, redOp, layerOp)
-  }
-
   /** Creates a Vec literal of this type with specified values. this must be a chisel type.
     *
     * @param elementInitializers literal values, specified as a pair of the Vec field to the literal value.
@@ -357,9 +290,6 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
     */
   private[chisel3] def _makeLit(
     elementInitializers: (Int, T)*
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): this.type = {
 
     def checkLiteralConstruction(): Unit = {
@@ -518,9 +448,6 @@ object VecInit {
     */
   private def getConnectOpFromDirectionality[T <: Data](
     proto: T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): (T, T) => Unit = proto.direction match {
     case ActualDirection.Input | ActualDirection.Output | ActualDirection.Unspecified =>
       // When internal wires are involved, driver / sink must be specified explicitly, otherwise
@@ -542,7 +469,7 @@ object VecInit {
     * element
     * @note output elements are connected from the input elements
     */
-  def apply[T <: Data](elts: Seq[T])(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] = {
+  def apply[T <: Data](elts: Seq[T]): Vec[T] = {
     // REVIEW TODO: this should be removed in favor of the apply(elts: T*)
     // varargs constructor, which is more in line with the style of the Scala
     // collection API. However, a deprecation phase isn't possible, since
@@ -554,7 +481,7 @@ object VecInit {
     require(elts.nonEmpty, "Vec hardware values are not allowed to be empty")
     elts.foreach(requireIsHardware(_, "vec element"))
 
-    val vec = Wire(Vec(elts.length, cloneSupertype(elts, "Vec")))
+    val vec: Vec[T] = Wire(Vec(elts.length, cloneSupertype(elts, "Vec")))
     val op = getConnectOpFromDirectionality(vec.head)
 
     (vec.zip(elts)).foreach { x =>
@@ -571,7 +498,7 @@ object VecInit {
     * element
     * @note output elements are connected from the input elements
     */
-  def apply[T <: Data](elt0: T, elts: T*)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] =
+  def apply[T <: Data](elt0: T, elts: T*): Vec[T] =
     apply(elt0 +: elts.toSeq)
 
   /** Creates a new [[Vec]] of length `n` composed of the results of the given
@@ -585,9 +512,6 @@ object VecInit {
   def tabulate[T <: Data](
     n:   Int
   )(gen: (Int) => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[T] =
     apply((0 until n).map(i => gen(i)))
 
@@ -604,9 +528,6 @@ object VecInit {
     n:   Int,
     m:   Int
   )(gen: (Int, Int) => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[Vec[T]] = {
     // TODO make this lazy (requires LazyList and cross compilation, beyond the scope of this PR)
     val elts = Seq.tabulate(n, m)(gen)
@@ -641,9 +562,6 @@ object VecInit {
     m:   Int,
     p:   Int
   )(gen: (Int, Int, Int) => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[Vec[Vec[T]]] = {
     // TODO make this lazy (requires LazyList and cross compilation, beyond the scope of this PR)
     val elts = Seq.tabulate(n, m, p)(gen)
@@ -674,7 +592,7 @@ object VecInit {
     * @param gen function that takes in an element T and returns an output
     * element of the same type
     */
-  def fill[T <: Data](n: Int)(gen: => T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Vec[T] =
+  def fill[T <: Data](n: Int)(gen: => T): Vec[T] =
     apply(Seq.fill(n)(gen))
 
   /** Creates a new 2D [[Vec]] of length `n by m` composed of the result of the given
@@ -689,9 +607,6 @@ object VecInit {
     n:   Int,
     m:   Int
   )(gen: => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[Vec[T]] = {
     tabulate(n, m)((_, _) => gen)
   }
@@ -710,9 +625,6 @@ object VecInit {
     m:   Int,
     p:   Int
   )(gen: => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[Vec[Vec[T]]] = {
     tabulate(n, m, p)((_, _, _) => gen)
   }
@@ -729,9 +641,6 @@ object VecInit {
     start: T,
     len:   Int
   )(f:     (T) => T
-  )(
-    implicit sourceInfo: SourceInfo,
-    compileOptions:      CompileOptions
   ): Vec[T] =
     apply(Seq.iterate(start, len)(f))
 
@@ -739,7 +648,7 @@ object VecInit {
   /** A trait for [[Vec]]s containing common hardware generators for collection
     * operations.
     */
-  def apply[T <: Data](p: UInt)(implicit compileOptions: CompileOptions): T
+  // def apply[T <: Data](p: UInt): T
 
   // IndexedSeq has its own hashCode/equals that we must not use
   override def hashCode: Int = super[HasId].hashCode
@@ -747,23 +656,23 @@ object VecInit {
 
   /** Outputs true if p outputs true for every element.
     */
-  def forall[T <: Data](p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def forall[T <: Data](p: T => Bool): Bool =
     (this.map(p)).fold(true.B)(_ && _)
 
   /** Outputs true if p outputs true for at least one element.
     */
-  def exists(p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool =
+  def exists(p: T => Bool): Bool =
     (this.map(p)).fold(false.B)(_ || _)
 
   /** Outputs true if the vector contains at least one element equal to x (using
     * the === operator).
     */
-  def contains(x: T)(implicit sourceInfo: SourceInfo, ev: T <:< UInt, compileOptions: CompileOptions): Bool =
+  def contains(x: T): Bool =
     this.exists(_ === x)
 
   /** Outputs the number of elements for which p is true.
     */
-  def count(p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
+  def count(p: T => Bool): UInt =
     SeqUtils.count(this.map(p))
 
   /** Helper function that appends an index (literal value) to each element,
@@ -773,12 +682,12 @@ object VecInit {
 
   /** Outputs the index of the first element for which p outputs true.
     */
-  def indexWhere(p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
+  def indexWhere(p: T => Bool): UInt =
     SeqUtils.priorityMux(indexWhereHelper(p))
 
   /** Outputs the index of the last element for which p outputs true.
     */
-  def lastIndexWhere(p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
+  def lastIndexWhere(p: T => Bool): UInt =
     SeqUtils.priorityMux(indexWhereHelper(p).reverse)
 
   /** Outputs the index of the element for which p outputs true, assuming that
@@ -791,7 +700,7 @@ object VecInit {
     * true is NOT checked (useful in cases where the condition doesn't always
     * hold, but the results are not used in those cases)
     */
-  def onlyIndexWhere(p: T => Bool)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
+  def onlyIndexWhere(p: T => Bool): UInt =
     SeqUtils.oneHotMux(indexWhereHelper(p))
 }
 
@@ -800,7 +709,7 @@ object VecInit {
   * Record should only be extended by libraries and fairly sophisticated generators.
   * RTL writers should use [[Bundle]].  See [[Record#elements]] for an example.
   */
-abstract class Record(private[chisel3] implicit val compileOptions: CompileOptions) extends Aggregate {
+abstract class Record extends Aggregate {
 
   private[chisel3] def _isOpaqueType: Boolean = this match {
     case maybe: OpaqueType => maybe.opaqueType
@@ -1163,7 +1072,7 @@ package experimental {
   *   }
   * }}}
   */
-abstract class Bundle(implicit compileOptions: CompileOptions) extends Record with experimental.AutoCloneType {
+abstract class Bundle extends Record with experimental.AutoCloneType {
   assert(
     _usingPlugin,
     "The Chisel compiler plugin is now required for compiling Chisel code. " +

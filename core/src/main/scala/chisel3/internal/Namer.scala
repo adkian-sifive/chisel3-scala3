@@ -53,7 +53,7 @@ sealed trait NamingContextInterface {
     * so that actual naming calls (HasId.suggestName) can happen.
     * Recursively names descendants, for those whose return value have an associated name.
     */
-  def namePrefix(prefix: String): String
+  def namePrefix(prefix: String): Unit
 }
 
 /** Dummy implementation to allow for naming annotations in a non-Builder context.

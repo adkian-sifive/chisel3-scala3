@@ -355,9 +355,9 @@ private[chisel3] trait HasId extends InstanceId {
     case Some(p)          => p.circuitName
   }
 
-  private[chisel3] def getPublicFields(rootClass: Class[_]): Seq[java.lang.reflect.Method] = {
+  private[chisel3] def getPublicFields(rootClass: Class[?]): Seq[java.lang.reflect.Method] = {
     // Suggest names to nodes using runtime reflection
-    def getValNames(c: Class[_]): Set[String] = {
+    def getValNames(c: Class[?]): Set[String] = {
       if (c == rootClass) {
         Set()
       } else {
@@ -726,7 +726,7 @@ private[chisel3] object Builder extends LazyLogging {
   }
 
   def getScalaMajorVersion: Int = {
-    val "2" :: major :: _ :: Nil = chisel3.BuildInfo.scalaVersion.split("\\.").toList
+    val "2" :: major :: _ :: Nil = chisel3.BuildInfo.scalaVersion.split("\\.").toList: @unchecked
     major.toInt
   }
 

@@ -81,7 +81,7 @@ final class WhenContext private[chisel3] (
   /** Returns the local condition, inverted for an otherwise */
   private[chisel3] def localCond: Bool = {
     val alt = altConds.foldRight(true.B) {
-      case (c, acc) => acc & !(c())
+      case (c, acc) => acc & !c()
     }
     cond
       .map(alt && _())

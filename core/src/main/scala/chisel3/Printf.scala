@@ -34,7 +34,7 @@ object printf {
   }
 
   /** Named class for [[printf]]s. */
-  final class Printf private[chisel3] (val pable: Printable) // extends VerificationStatement
+  final class Printf private[chisel3] (val pable: Printable) extends NamedComponent// extends VerificationStatement
 
   /** Prints a message in simulation
     *
@@ -116,5 +116,5 @@ object printf {
     fmt:  String,
     data: Bits*
   ): Printf =
-    printfWithoutReset(Printable.pack(fmt, data: _*))
+    printfWithoutReset(Printable.pack(fmt, data*))
 }

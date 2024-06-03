@@ -553,7 +553,7 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     "Chisel 3.5"
   )
 
-  def unary_!(): Bool = this === 0.U(1.W)
+def unary_! : Bool = this === 0.U(1.W)
 
   override def <<(that: Int): UInt =
     binop(UInt(this.width + that), ShiftLeftOp, validateShiftAmount(that))
@@ -593,19 +593,19 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     case _                         => this(n - 1, 0) ## (this >> n)
   }
 
-  private def dynamicShift(
-    n:           UInt,
-    staticShift: (UInt, Int) => UInt
-  ): UInt =
-    n.asBools().zipWithIndex.foldLeft(this) {
-      case (in, (en, sh)) => Mux(en, staticShift(in, 1 << sh), in)
-    }
+  // private def dynamicShift(
+  //   n:           UInt,
+  //   staticShift: (UInt, Int) => UInt
+  // ): UInt =
+  //   n.asBools().zipWithIndex.foldLeft(this) {
+  //     case (in, (en, sh)) => Mux(en, staticShift(in, 1 << sh), in)
+  //   }
 
-  def rotateRight(n: UInt): UInt =
-    dynamicShift(n, _ rotateRight _)
+  // def rotateRight(n: UInt): UInt =
+  //   dynamicShift(n, _ rotateRight _)
 
-  def rotateLeft(n: UInt): UInt =
-    dynamicShift(n, _ rotateLeft _)
+  // def rotateLeft(n: UInt): UInt =
+  //   dynamicShift(n, _ rotateLeft _)
 
   /** Conditionally set or clear a bit
     *
@@ -705,9 +705,9 @@ sealed class SInt private[chisel3] (width: Width) extends Bits(width) with Num[S
     "Chisel 3.5"
   )
 
-  def unary_-(): SInt = 0.S - this
+  def unary_- : SInt = 0.S - this
 
-  def unary_-%(): SInt = 0.S -% this
+  def unary_-% : SInt = 0.S -% this
 
   /** add (default - no growth) operator */
   override def +(that: SInt): SInt =
@@ -913,7 +913,7 @@ final class ResetType(private[chisel3] val width: Width = Width(1)) extends Elem
   /** Not really supported */
   def toPrintable: Printable = PString("Reset")
 
-  override def do_asUInt: UInt = pushOp(
+  def asUInt: UInt = pushOp(
     DefPrim(UInt(this.width), AsUIntOp, ref)
   )
 

@@ -602,8 +602,8 @@ abstract class Data extends HasId with NamedComponent {
   private[chisel3] def bulkConnect(
     that: Data
   ): Unit = {
-    requireIsHardware(this, s"data to be bulk-connected")
-    requireIsHardware(that, s"data to be bulk-connected")
+    // requireIsHardware(this, s"data to be bulk-connected")
+    // requireIsHardware(that, s"data to be bulk-connected")
       (this.topBinding, that.topBinding) match {
       case (_: ReadOnlyBinding, _: ReadOnlyBinding) => throwException(s"Both $this and $that are read-only")
       // DontCare cannot be a sink (LHS)
@@ -700,7 +700,6 @@ abstract class Data extends HasId with NamedComponent {
   }
 
   private[chisel3] def width: Width
-  private[chisel3] def legacyConnect(that: Data): Unit
 
   /** Internal API; Chisel users should look at chisel3.chiselTypeOf(...).
     *
@@ -720,7 +719,7 @@ abstract class Data extends HasId with NamedComponent {
     val clone = this.cloneType.asInstanceOf[this.type] // get a fresh object, without bindings
     // Only the top-level direction needs to be fixed up, cloneType should do the rest
     clone.specifiedDirection = specifiedDirection
-    clone
+    clone.asInstanceOf[this.type]
   }
 
   /** Connect this $coll to that $coll mono-directionally and element-wise.
@@ -1069,7 +1068,7 @@ final case object DontCare extends Element {
     Builder.error("connectFromBits: DontCare cannot be a connection sink (LHS)")
   }
 
-  def do_asUInt: UInt = {
+  def asUInt: UInt = {
     Builder.error("DontCare does not have a UInt representation")
     0.U
   }

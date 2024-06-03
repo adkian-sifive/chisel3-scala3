@@ -96,7 +96,7 @@ private[chisel3] object Converter {
       val consts = e.args.collect { case ILit(i) => i }
       val args = e.args.flatMap {
         case _: ILit => None
-        case other => Some(convert(other, ctx, fir.NoInfo))
+        case other => Some(convert(other, ctx))
       }
       val expr = e.op.name match {
         case "mux" =>
@@ -168,24 +168,6 @@ private[chisel3] object Converter {
           e.name
         )
       )
-    case e @ Verification(_, op, clk, pred, msg) =>
-      val firOp = op match {
-        case Formal.Assert => fir.Formal.Assert
-        case Formal.Assume => fir.Formal.Assume
-        case Formal.Cover  => fir.Formal.Cover
-      }
-      None
-      // Some(
-      //   fir.Verification(
-      //     firOp,
-      //     fir.NoInfo,
-      //     convert(clk, ctx),
-      //     convert(pred, ctx),
-      //     firrtl.Utils.one,
-      //     fir.StringLit(msg),
-      //     e.name
-      //   )
-      // )
     case _ => None
   }
 
@@ -245,7 +227,7 @@ private[chisel3] object Converter {
                 else frame.when.copy(conseq = fir.Block(stmts.result()))
               // Check if this when has an else
               cmdsIt.headOption match {
-                case Some(AltBegin(_)) =>
+                case Some(AltBegin()) =>
                   assert(!frame.alt, "Internal Error! Unexpected when structure!") // Only 1 else per when
                   scope = frame.copy(when = when, alt = true) :: scope.tail
                   cmdsIt.next() // Consume the AltBegin

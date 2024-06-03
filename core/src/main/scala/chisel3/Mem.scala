@@ -135,7 +135,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
     data: T,
     mask: Seq[Bool]
   )(
-    implicit evidence: T <:< Vec[_]
+    implicit evidence: T <:< Vec[?]
   ): Unit =
     masked_write_impl(idx, data, mask, Builder.forcedClock, true)
 
@@ -156,7 +156,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
     mask:  Seq[Bool],
     clock: Clock
   )(
-    implicit evidence: T <:< Vec[_]
+    implicit evidence: T <:< Vec[?]
   ): Unit =
     masked_write_impl(idx, data, mask, clock, false)
 
@@ -167,7 +167,7 @@ sealed abstract class MemBase[T <: Data](val t: T, val length: BigInt)
     clock: Clock,
     warn:  Boolean
   )(
-    implicit evidence: T <:< Vec[_],
+    implicit evidence: T <:< Vec[?],
   ): Unit = {
     val accessor = makePort(idx, MemPortDirection.WRITE, clock).asInstanceOf[Vec[Data]]
     val dataVec = data.asInstanceOf[Vec[Data]]

@@ -367,9 +367,6 @@ private[chisel3] object BiConnect {
 
   // This function checks if analog element-level attaching is allowed, then marks the Analog as connected
   def markAnalogConnected(analog: Analog, contextModule: BaseModule): Unit = {
-    analog.biConnectLocs.get(contextModule) match {
-      case Some(sl) => throw AttachAlreadyBulkConnectedException
-      case None     => // Do nothing
-    }
+    println("not doing anything for analog till we have sourceinfos again")
   }
 }

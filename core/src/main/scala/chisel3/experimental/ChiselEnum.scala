@@ -141,9 +141,9 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
     * @param s a [[scala.collection.Seq$ Seq]] of enumeration values to look for
     * @return a hardware [[Bool]] that indicates if this value matches any of the given values
     */
-  final def isOneOf(s: Seq[EnumType]): Bool = {
-    VecInit(s.map(this === _)).asUInt().orR()
-  }
+  // final def isOneOf(s: Seq[EnumType]): Bool = {
+  //   Vec(s.map(this === _)).asUInt().orR()
+  // }
 
   /** Test if this enumeration is equal to any of the values given as arguments
     *
@@ -151,10 +151,10 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
     * @param u2 zero or more additional values to look for
     * @return a hardware [[Bool]] that indicates if this value matches any of the given values
     */
-  final def isOneOf(
-    u1: EnumType,
-    u2: EnumType*
-  ): Bool = isOneOf(u1 +: u2.toSeq)
+  // final def isOneOf(
+  //   u1: EnumType,
+  //   u2: EnumType*
+  // ): Bool = isOneOf(u1 +: u2.toSeq)
 
   def next: this.type = {
     if (litOption.isDefined) {
@@ -204,7 +204,7 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
       }.flatten.toSeq
   }
 
-  private def outerMostVec(d: Data = this): Option[Vec[_]] = {
+  private def outerMostVec(d: Data = this): Option[Vec[?]] = {
     val currentVecOpt = d match {
       case v: Vec[_] => Some(v)
       case _ => None
@@ -253,7 +253,7 @@ abstract class EnumType(private[chisel3] val factory: ChiselEnum, selfAnnotating
     for ((name, value) <- allNamesPadded) {
       when(this === value) {
         for ((r, c) <- result.zip(name)) {
-          r := c.toChar.U
+          r := c.toInt.U
         }
       }
     }

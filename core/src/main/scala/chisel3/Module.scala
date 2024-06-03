@@ -73,7 +73,7 @@ object Module {
     if (Builder.currentModule.isDefined && module._component.isDefined) {
       val component = module._component.get
       pushCommand(DefInstance(module, component.ports))
-      module.initializeInParent
+      module.initializeInParent()
     }
     module
   }
@@ -173,7 +173,7 @@ abstract class Module extends RawModule {
 
   private[chisel3] override def initializeInParent(): Unit = {
 
-    super.initializeInParent
+    super.initializeInParent()
     clock := _override_clock.getOrElse(Builder.forcedClock)
     reset := _override_reset.getOrElse(Builder.forcedReset)
   }
@@ -255,7 +255,7 @@ package experimental {
 
     /** Sets up this module in the parent context
       */
-    private[chisel3] def initializeInParent: Unit
+    private[chisel3] def initializeInParent(): Unit
 
     //
     // Chisel Internals
@@ -335,7 +335,7 @@ package experimental {
       *
       * Helper method.
       */
-    protected def nameIds(rootClass: Class[_]): HashMap[HasId, String] = {
+    protected def nameIds(rootClass: Class[?]): HashMap[HasId, String] = {
       val names = new HashMap[HasId, String]()
 
       def name(node: HasId, name: String) = {

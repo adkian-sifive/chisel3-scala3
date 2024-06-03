@@ -80,28 +80,6 @@ sealed abstract class Aggregate extends Data {
   }
 }
 
-object Vec {
-  /** Creates a new [[Vec]] with `n` entries of the specified data type.
-    *
-    * @note elements are NOT assigned by default and have no value
-    */
-  def apply[T <: Data](n: Int, gen: T): Vec[T] = {
-    new Vec(gen.cloneTypeFull, n)
-  }
-
-  /** Truncate an index to implement modulo-power-of-2 addressing. */
-  private[chisel3] def truncateIndex(
-    idx: UInt,
-    n:   BigInt
-  ): UInt = {
-    val w = (n - 1).bitLength
-    if (n <= 1) 0.U
-    else if (idx.width.known && idx.width.get <= w) idx
-    else if (idx.width.known) idx(w - 1, 0)
-    else (idx | 0.U(w.W))(w - 1, 0)
-  }
-}
-
 /** A vector (array) of [[Data]] elements. Provides hardware versions of various
   * collection transformation functions found in software array implementations.
   *
@@ -128,8 +106,9 @@ object Vec {
   *  - when multiple conflicting assignments are performed on a Vec element, the last one takes effect (unlike Mem, where the result is undefined)
   *  - Vecs, unlike classes in Scala's collection library, are propagated intact to FIRRTL as a vector type, which may make debugging easier
   */
-sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extends Aggregate with Iterator[T] {
-
+class Vec[T <: Data] private[chisel3] (gen: => T, val vec_length: Int) extends Aggregate with Iterator[T] {
+  def hasNext: Boolean = ???
+  def next(): T = ???
   override def toString: String = {
     topBindingOpt match {
       case Some(VecLitBinding(vecLitBinding)) =>
@@ -137,14 +116,14 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
           case ((data, lit), index) =>
             s"$index=$lit"
         }.mkString(", ")
-        s"${sample_element.cloneType}[$length]($contents)"
-      case _ => stringAccessor(s"${sample_element.cloneType}[$length]")
+        s"${sample_element.cloneType}[$vec_length]($contents)"
+      case _ => stringAccessor(s"${sample_element.cloneType}[$vec_length]")
     }
   }
 
   private[chisel3] override def typeEquivalent(that: Data): Boolean = that match {
     case that: Vec[T] =>
-      this.length == that.length &&
+      this.vec_length == that.vec_length &&
       (this.sample_element.typeEquivalent(that.sample_element))
     case _ => false
   }
@@ -168,7 +147,7 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
   // that all elements must be the same and because it makes FIRRTL generation
   // simpler.
   private lazy val self: Seq[T] = {
-    val _self = Vector.fill(length)(gen)
+    val _self = Vector.fill(vec_length)(gen)
     for ((elt, i) <- _self.zipWithIndex)
       elt.setRef(this, i)
     _self
@@ -437,12 +416,33 @@ sealed class Vec[T <: Data] private[chisel3] (gen: => T, val length: Int) extend
         }
     }
 
-    clone.bind(VecLitBinding(VectorMap(vecLitLinkedMap.toSeq: _*)))
-    clone
+    clone.bind(VecLitBinding(VectorMap(vecLitLinkedMap.toSeq*)))
+    clone.asInstanceOf[this.type]
   }
+
 }
 
-object VecInit {
+object Vec {
+
+  /** Creates a new [[Vec]] with `n` entries of the specified data type.
+    *
+    * @note elements are NOT assigned by default and have no value
+    */
+  def apply[T <: Data](n: Int, gen: T): Vec[T] = {
+    new Vec(gen.cloneTypeFull, n)
+  }
+
+  /** Truncate an index to implement modulo-power-of-2 addressing. */
+  private[chisel3] def truncateIndex(
+    idx: UInt,
+    n:   BigInt
+  ): UInt = {
+    val w = (n - 1).bitLength
+    if (n <= 1) 0.U
+    else if (idx.width.known && idx.width.get <= w) idx
+    else if (idx.width.known) idx(w - 1, 0)
+    else (idx | 0.U(w.W))(w - 1, 0)
+  }
 
   /** Gets the correct connect operation (directed hardware assign or bulk connect) for element in Vec.
     */
@@ -482,7 +482,7 @@ object VecInit {
     elts.foreach(requireIsHardware(_, "vec element"))
 
     val vec: Vec[T] = Wire(Vec(elts.length, cloneSupertype(elts, "Vec")))
-    val op = getConnectOpFromDirectionality(vec.head)
+    val op = getConnectOpFromDirectionality(vec(0))
 
     (vec.zip(elts)).foreach { x =>
       op(x._1, x._2)
@@ -538,7 +538,7 @@ object VecInit {
 
     val tpe = cloneSupertype(flatElts, "Vec.tabulate")
     val myVec = Wire(Vec(n, Vec(m, tpe)))
-    val op = getConnectOpFromDirectionality(myVec.head.head)
+    val op = getConnectOpFromDirectionality(myVec(0)(0))
     for {
       (xs1D, ys1D) <- myVec.zip(elts)
       (x, y) <- xs1D.zip(ys1D)
@@ -572,7 +572,7 @@ object VecInit {
 
     val tpe = cloneSupertype(flatElts, "Vec.tabulate")
     val myVec = Wire(Vec(n, Vec(m, Vec(p, tpe))))
-    val op = getConnectOpFromDirectionality(myVec.head.head.head)
+    val op = getConnectOpFromDirectionality(myVec(0)(0)(0))
 
     for {
       (xs2D, ys2D) <- myVec.zip(elts)
@@ -651,44 +651,44 @@ object VecInit {
   // def apply[T <: Data](p: UInt): T
 
   // IndexedSeq has its own hashCode/equals that we must not use
-  override def hashCode: Int = super[HasId].hashCode
-  override def equals(that: Any): Boolean = super[HasId].equals(that)
+  override def hashCode: Int = super.hashCode
+  override def equals(that: Any): Boolean = super.equals(that)
 
   /** Outputs true if p outputs true for every element.
     */
-  def forall[T <: Data](p: T => Bool): Bool =
-    (this.map(p)).fold(true.B)(_ && _)
+  // def forall[T <: Data](p: T => Bool): Bool =
+  //   (this.toSeq.map(p)).fold(true.B)(_ && _)
 
   /** Outputs true if p outputs true for at least one element.
     */
-  def exists(p: T => Bool): Bool =
-    (this.map(p)).fold(false.B)(_ || _)
+  // def exists[T <: Data](p: T => Bool): Bool =
+  //   (this.toSeq.map(p)).fold(false.B)(_ || _)
 
   /** Outputs true if the vector contains at least one element equal to x (using
     * the === operator).
     */
-  def contains(x: T): Bool =
-    this.exists(_ === x)
+  // def contains[T <: Data](x: T): Bool =
+  //   this.exists(_ === x)
 
   /** Outputs the number of elements for which p is true.
     */
-  def count(p: T => Bool): UInt =
-    SeqUtils.count(this.map(p))
+  // def count[T <: Data](p: T => Bool): UInt =
+  //   SeqUtils.count(this.toSeq.map(p))
 
   /** Helper function that appends an index (literal value) to each element,
     * useful for hardware generators which output an index.
     */
-  private def indexWhereHelper(p: T => Bool) = this.map(p).zip((0 until length).map(i => i.asUInt))
+  // private def indexWhereHelper(p: T => Bool) = this.map(p).zip((0 until length).map(i => i.asUInt))
 
   /** Outputs the index of the first element for which p outputs true.
     */
-  def indexWhere(p: T => Bool): UInt =
-    SeqUtils.priorityMux(indexWhereHelper(p))
+  // def indexWhere(p: T => Bool): UInt =
+  //   SeqUtils.priorityMux(indexWhereHelper(p))
 
   /** Outputs the index of the last element for which p outputs true.
     */
-  def lastIndexWhere(p: T => Bool): UInt =
-    SeqUtils.priorityMux(indexWhereHelper(p).reverse)
+  // def lastIndexWhere(p: T => Bool): UInt =
+  //   SeqUtils.priorityMux(indexWhereHelper(p).reverse)
 
   /** Outputs the index of the element for which p outputs true, assuming that
     * the there is exactly one such element.
@@ -700,8 +700,8 @@ object VecInit {
     * true is NOT checked (useful in cases where the condition doesn't always
     * hold, but the results are not used in those cases)
     */
-  def onlyIndexWhere(p: T => Bool): UInt =
-    SeqUtils.oneHotMux(indexWhereHelper(p))
+  // def onlyIndexWhere(p: T => Bool): UInt =
+  //   SeqUtils.oneHotMux(indexWhereHelper(p))
 }
 
 /** Base class for Aggregates based on key values pairs of String and Data
@@ -824,7 +824,7 @@ abstract class Record extends Aggregate {
     val cloneFields = getRecursiveFields(clone, "(bundle root)").toMap
 
     // Create the Bundle literal binding from litargs of arguments
-    val bundleLitMap = elems.map { fn => fn(clone) }.flatMap {
+    val bundleLitMap = elems.map { fn => fn(clone.asInstanceOf[this.type]) }.flatMap {
       case (field, value) =>
         val fieldName = cloneFields.getOrElse(
           field,
@@ -912,7 +912,7 @@ abstract class Record extends Aggregate {
       throw new BundleLiteralException(s"duplicate fields $duplicateNames in Bundle literal constructor")
     }
     clone.bind(BundleLitBinding(bundleLitMap.toMap))
-    clone
+    clone.asInstanceOf[this.type]
   }
 
   /** The collection of [[Data]]
@@ -1161,7 +1161,7 @@ abstract class Bundle extends Record with experimental.AutoCloneType {
       case _ => None
     }.sortWith {
       case ((an, a), (bn, b)) => (a._id > b._id) || ((a eq b) && (an > bn))
-    }: _*)
+    }*)
   }
 
   /* The old, reflective implementation of Bundle.elements
@@ -1200,7 +1200,7 @@ abstract class Bundle extends Record with experimental.AutoCloneType {
           }
       }
     }
-    VectorMap(nameMap.toSeq.sortWith { case ((an, a), (bn, b)) => (a._id > b._id) || ((a eq b) && (an > bn)) }: _*)
+    VectorMap(nameMap.toSeq.sortWith { case ((an, a), (bn, b)) => (a._id > b._id) || ((a eq b) && (an > bn)) }*)
   }
 
   /**
@@ -1242,7 +1242,7 @@ abstract class Bundle extends Record with experimental.AutoCloneType {
   override def cloneType: this.type = {
     val clone = _cloneTypeImpl.asInstanceOf[this.type]
     checkClone(clone)
-    clone
+    clone.asInstanceOf[this.type]
   }
 
   // This is overriden for binary compatibility reasons in 3.5

@@ -132,7 +132,7 @@ object Printable {
     // The literal \ needs to be escaped before sending to the custom cf interpolator.
 
     val bufEscapeBackSlash = buf.map(_.replace("\\", "\\\\"))
-    StringContext(bufEscapeBackSlash.toSeq: _*).cf(data: _*)
+    StringContext(bufEscapeBackSlash.toSeq*).cf(data*)
   }
 
   private[chisel3] def checkScope(message: Printable): Unit = {

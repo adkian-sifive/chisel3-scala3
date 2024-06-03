@@ -35,7 +35,7 @@ trait ChiselMultiAnnotation {
   * FIRRTL.
   */
 trait RunFirrtlTransform extends ChiselAnnotation {
-  def transformClass: Class[_ <: Transform]
+  def transformClass: Class[? <: Transform]
 }
 
 object annotate {

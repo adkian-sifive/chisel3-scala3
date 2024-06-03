@@ -365,10 +365,10 @@ case class Circuit(
     )
 
   def copy(
-    name:        String = name,
-    components:  Seq[Component] = components,
-    annotations: Seq[ChiselAnnotation] = annotations,
-    renames:     RenameMap = renames
+    name:        String,
+    components:  Seq[Component],
+    annotations: Seq[ChiselAnnotation],
+    renames:     RenameMap
   ) = Circuit(name, components, annotations, renames, newAnnotations)
 
 }

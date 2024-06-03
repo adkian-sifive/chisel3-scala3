@@ -196,7 +196,7 @@ package object chisel3 {
     def p(args: Any*): Printable = {
       // P interpolator does not treat % differently - hence need to add % before sending to cf.
       val t = sc.parts.map(_.replaceAll("%", "%%"))
-      StringContext(t: _*).cf(args: _*)
+      StringContext(t*).cf(args*)
     }
 
     /** Custom string interpolator for generating formatted Printables : cf"..."

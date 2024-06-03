@@ -123,7 +123,7 @@ package object experimental {
   object BundleLiterals {
     implicit class AddBundleLiteralConstructor[T <: Record](x: T) {
       def Lit(elems: (T => (Data, Data))*): T = {
-        x._makeLit(elems: _*)
+        x._makeLit(elems*)
       }
     }
   }
@@ -140,7 +140,7 @@ package object experimental {
         * @return
         */
       def Lit(elems: (Int, T)*): Vec[T] = {
-        x._makeLit(elems: _*)
+        x._makeLit(elems*)
       }
     }
 
@@ -154,7 +154,7 @@ package object experimental {
         val indexElements: Seq[(Int, T)] = elems.zipWithIndex.map { case (element, index) => (index, element) }
         val widestElement: T = elems.maxBy(_.getWidth)
         val vec: Vec[T] = Vec.apply(indexElements.length, chiselTypeOf(widestElement))
-        vec.Lit(indexElements: _*)
+        vec.Lit(indexElements*)
       }
     }
   }

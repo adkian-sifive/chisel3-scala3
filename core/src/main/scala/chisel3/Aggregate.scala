@@ -1072,13 +1072,7 @@ package experimental {
   *   }
   * }}}
   */
-abstract class Bundle extends Record with experimental.AutoCloneType {
-  assert(
-    _usingPlugin,
-    "The Chisel compiler plugin is now required for compiling Chisel code. " +
-      "Please see https://github.com/chipsalliance/chisel3#build-your-own-chisel-projects."
-  )
-
+abstract class Bundle extends Record {
   override def className: String = try {
     this.getClass.getSimpleName match {
       case name if name.startsWith("$anon$") => "AnonymousBundle" // fallback for anonymous Bundle case
@@ -1216,13 +1210,6 @@ abstract class Bundle extends Record with experimental.AutoCloneType {
     case Some(d: Data) => Some(d)
     case _ => None
   }
-
-  /** Indicates if a concrete Bundle class was compiled using the compiler plugin
-    *
-    * Used for optimizing Chisel's performance and testing Chisel itself
-    * @note This should not be used in user code!
-    */
-  protected def _usingPlugin: Boolean = false
 
   private def checkClone(clone: Bundle): Unit = {
     for ((name, field) <- elements) {

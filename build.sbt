@@ -4,7 +4,7 @@ import com.typesafe.tools.mima.core._
 
 Compile / compile / logLevel := Level.Error
 
-val scala3Version = "3.4.1"
+val scala3Version = "3.4.2"
 
 lazy val commonSettings = Seq (
   organization := "edu.berkeley.cs",

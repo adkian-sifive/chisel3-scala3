@@ -216,7 +216,7 @@ sealed abstract class Bits(private[chisel3] val width: Width) extends Element wi
     * @return this $coll with each bit inverted
     * @group Bitwise
     */
-  def unary_~(): Bits
+  def unary_~ : Bits
 
   /** Static left shift operator
     *
@@ -368,10 +368,10 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     * @group Arithmetic
     */
 
-  def unary_-(): UInt = 0.U - this
+  def unary_- : UInt = 0.U - this
 
 
-  def unary_-%(): UInt = 0.U -% this
+  def unary_-% : UInt = 0.U -% this
 
   override def +(that: UInt): UInt = this +% that
   override def -(that: UInt): UInt = this -% that
@@ -471,7 +471,7 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
   def ^(that: UInt): UInt =
     binop(UInt(this.width.max(that.width)), BitXorOp, that)
 
-  def unary_~(): UInt =
+  def unary_~ : UInt =
     unop(UInt(width = width), BitNotOp)
 
   // REVIEW TODO: Can these be defined on Bits?
@@ -807,7 +807,7 @@ sealed class SInt private[chisel3] (width: Width) extends Bits(width) with Num[S
   def ^(that: SInt): SInt =
     binop(UInt(this.width.max(that.width)), BitXorOp, that).asSInt
 
-  def unary_~(): SInt =
+  def unary_~ : SInt =
     unop(UInt(width = width), BitNotOp).asSInt
 
   override def <(that: SInt): Bool =
@@ -1037,7 +1037,7 @@ sealed class Bool() extends UInt(1.W) with Reset {
   def ^(that: Bool): Bool =
     binop(Bool(), BitXorOp, that)
 
-  override def unary_~(): Bool =
+  override def unary_~ : Bool =
     unop(Bool(), BitNotOp)
 
   /** Logical or operator

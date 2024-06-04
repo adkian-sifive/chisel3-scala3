@@ -58,7 +58,7 @@ object group {
     annotate(new ChiselAnnotation with RunFirrtlTransform {
       def toFirrtl = GroupAnnotation(components.map(_.toNamed), newModule, newInstance, outputSuffix, inputSuffix)
 
-      override def transformClass: Class[_ <: Transform] = classOf[GroupComponents]
+      override def transformClass: Class[? <: Transform] = classOf[GroupComponents]
     })
   }
 }

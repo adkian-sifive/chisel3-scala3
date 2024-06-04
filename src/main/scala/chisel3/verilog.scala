@@ -2,6 +2,7 @@ package chisel3
 
 import chisel3.stage.ChiselStage
 import firrtl.AnnotationSeq
+import firrtl.seqToAnnoSeq
 
 object getVerilogString {
 

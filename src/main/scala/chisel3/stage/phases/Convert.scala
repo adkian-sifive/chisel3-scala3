@@ -31,7 +31,7 @@ class Convert extends Phase {
         a.circuit.firrtlAnnotations ++
         a.circuit.annotations.collect {
           case anno: RunFirrtlTransform => anno.transformClass
-        }.distinct.map { c: Class[_ <: Transform] => RunFirrtlTransformAnnotation(c.newInstance()) }
+        }.distinct.map { (c: Class[? <: Transform]) => RunFirrtlTransformAnnotation(c.newInstance()) }
     case a => Some(a)
   }
 

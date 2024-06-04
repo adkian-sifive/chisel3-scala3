@@ -19,7 +19,7 @@ object Cat {
   /** Concatenates the argument data elements, in argument order, together. The first argument
     * forms the most significant bits, while the last argument forms the least significant bits.
     */
-  def apply[T <: Bits](@deprecatedName('a, "Chisel 3.5") a: T, @deprecatedName('r, "Chisel 3.5") r: T*): UInt = apply(
+  def apply[T <: Bits](@deprecatedName(Symbol("a"), "Chisel 3.5") a: T, @deprecatedName(Symbol("r"), "Chisel 3.5") r: T*): UInt = apply(
     a :: r.toList
   )
 
@@ -30,5 +30,5 @@ object Cat {
     * Equivalent to r(0) ## r(1) ## ... ## r(n-1).
     * @note This returns a `0.U` if applied to a zero-element `Vec`.
     */
-  def apply[T <: Bits](@deprecatedName('r, "Chisel 3.5") r: Seq[T]): UInt = SeqUtils.asUInt(r.reverse)
+  def apply[T <: Bits](@deprecatedName(Symbol("r"), "Chisel 3.5") r: Seq[T]): UInt = SeqUtils.asUInt(r.reverse)
 }

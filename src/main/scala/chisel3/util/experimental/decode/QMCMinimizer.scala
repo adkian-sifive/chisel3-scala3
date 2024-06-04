@@ -264,7 +264,7 @@ object QMCMinimizer extends Minimizer {
 
       implicants.foreach(_.isPrime = true)
       val cols = (0 to n).reverse.map(b => implicants.filter(b == _.bp.mask.bitCount))
-      val mergeTable = cols.map(c => (0 to n).map(b => collection.mutable.Set(c.filter(b == _.bp.value.bitCount): _*)))
+      val mergeTable = cols.map(c => (0 to n).map(b => collection.mutable.Set(c.filter(b == _.bp.value.bitCount)*)))
 
       // O(n ^ 3)
       for (i <- 0 to n) {

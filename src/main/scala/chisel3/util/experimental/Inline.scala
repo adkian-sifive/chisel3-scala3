@@ -43,7 +43,7 @@ trait InlineInstance { self: BaseModule =>
   Seq(
     new ChiselAnnotation with RunFirrtlTransform {
       def toFirrtl:       Annotation = InlineAnnotation(self.toNamed)
-      def transformClass: Class[_ <: Transform] = classOf[InlineInstances]
+      def transformClass: Class[? <: Transform] = classOf[InlineInstances]
     },
     new ChiselAnnotation {
       def toFirrtl: Annotation = NoDedupAnnotation(self.toNamed)
@@ -82,7 +82,7 @@ trait FlattenInstance { self: BaseModule =>
   Seq(
     new ChiselAnnotation with RunFirrtlTransform {
       def toFirrtl:       Annotation = FlattenAnnotation(self.toNamed)
-      def transformClass: Class[_ <: Transform] = classOf[Flatten]
+      def transformClass: Class[? <: Transform] = classOf[Flatten]
     },
     new ChiselAnnotation {
       def toFirrtl: Annotation = NoDedupAnnotation(self.toNamed)

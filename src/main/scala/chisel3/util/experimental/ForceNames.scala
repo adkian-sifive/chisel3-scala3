@@ -28,7 +28,7 @@ object forceName {
     if (!signal.isSynthesizable) Builder.deprecated(s"Using forceName '$name' on non-hardware value $signal")
     annotate(new ChiselAnnotation with RunFirrtlTransform {
       def toFirrtl = ForceNameAnnotation(signal.toTarget, name)
-      override def transformClass: Class[_ <: Transform] = classOf[ForceNamesTransform]
+      override def transformClass: Class[? <: Transform] = classOf[ForceNamesTransform]
     })
     signal
   }
@@ -42,7 +42,7 @@ object forceName {
     if (!signal.isSynthesizable) Builder.deprecated(s"Using forceName on non-hardware value $signal")
     annotate(new ChiselAnnotation with RunFirrtlTransform {
       def toFirrtl = ForceNameAnnotation(signal.toTarget, signal.toTarget.ref)
-      override def transformClass: Class[_ <: Transform] = classOf[ForceNamesTransform]
+      override def transformClass: Class[? <: Transform] = classOf[ForceNamesTransform]
     })
     signal
   }
@@ -57,7 +57,7 @@ object forceName {
         val t = instance.toAbsoluteTarget
         ForceNameAnnotation(t, name)
       }
-      override def transformClass: Class[_ <: Transform] = classOf[ForceNamesTransform]
+      override def transformClass: Class[? <: Transform] = classOf[ForceNamesTransform]
     })
   }
 
@@ -72,7 +72,7 @@ object forceName {
         val t = instance.toAbsoluteTarget
         ForceNameAnnotation(t, instance.instanceName)
       }
-      override def transformClass: Class[_ <: Transform] = classOf[ForceNamesTransform]
+      override def transformClass: Class[? <: Transform] = classOf[ForceNamesTransform]
     })
   }
 }
@@ -132,7 +132,7 @@ private object ForceNamesTransform {
           .view
           .map(_.map(_.toTokens).toList)
           .toList
-    allInstancePaths(lookup) _
+    allInstancePaths(lookup)
   }
 
   /** Returns a function which returns all instance paths to a given IsModule

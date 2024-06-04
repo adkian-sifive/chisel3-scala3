@@ -725,20 +725,6 @@ private[chisel3] object Builder extends LazyLogging {
     throwException(m)
   }
 
-  def getScalaMajorVersion: Int = {
-    val "2" :: major :: _ :: Nil = chisel3.BuildInfo.scalaVersion.split("\\.").toList: @unchecked
-    major.toInt
-  }
-
-  def checkScalaVersion(): Unit = {
-    if (getScalaMajorVersion == 11) {
-      val url = _root_.firrtl.stage.transforms.CheckScalaVersion.migrationDocumentLink
-      val msg = s"Chisel 3.4 is the last version that will support Scala 2.11. " +
-        s"Please upgrade to Scala 2.12. See $url"
-      deprecated(msg, Some(""))
-    }
-  }
-
   private[chisel3] def build[T <: BaseModule](
     f:              => T,
     dynamicContext: DynamicContext,
@@ -746,7 +732,6 @@ private[chisel3] object Builder extends LazyLogging {
   ): (Circuit, T) = {
     dynamicContextVar.withValue(Some(dynamicContext)) {
       // in tiny designs/testcases that never access anything in chisel3.internal
-      checkScalaVersion()
       logger.info("Elaborating design...")
       val mod = f
       if (forceModName) { // This avoids definition name index skipping with D/I

@@ -13,8 +13,8 @@ object RegEnable {
     * }}}
     */
   def apply[T <: Data](
-    @deprecatedName('next, "Chisel 3.5") next:     T,
-    @deprecatedName('enable, "Chisel 3.5") enable: Bool
+    @deprecatedName(Symbol("next"), "Chisel 3.5") next:     T,
+    @deprecatedName(Symbol("enable"), "Chisel 3.5") enable: Bool
   ): T = {
     val r = Reg(chiselTypeOf(next))
     when(enable) { r := next }
@@ -28,9 +28,9 @@ object RegEnable {
     * }}}
     */
   def apply[T <: Data](
-    @deprecatedName('next, "Chisel 3.5") next:     T,
-    @deprecatedName('init, "Chisel 3.5") init:     T,
-    @deprecatedName('enable, "Chisel 3.5") enable: Bool
+    @deprecatedName(Symbol("next"), "Chisel 3.5") next:     T,
+    @deprecatedName(Symbol("init"), "Chisel 3.5") init:     T,
+    @deprecatedName(Symbol("enable"), "Chisel 3.5") enable: Bool
   ): T = {
     val r = RegInit(init)
     when(enable) { r := next }
@@ -51,9 +51,9 @@ object ShiftRegister {
     * }}}
     */
   def apply[T <: Data](
-    @deprecatedName('in, "Chisel 3.5") in: T,
-    @deprecatedName('n, "Chisel 3.5") n:   Int,
-    @deprecatedName('en, "Chisel 3.5") en: Bool = true.B
+    @deprecatedName(Symbol("in"), "Chisel 3.5") in: T,
+    @deprecatedName(Symbol("n"), "Chisel 3.5") n:   Int,
+    @deprecatedName(Symbol("en"), "Chisel 3.5") en: Bool = true.B
   ): T = ShiftRegisters(in, n, en).lastOption.getOrElse(in)
 
   /** Returns the n-cycle delayed version of the input signal with reset initialization.
@@ -68,10 +68,10 @@ object ShiftRegister {
     * }}}
     */
   def apply[T <: Data](
-    @deprecatedName('in, "Chisel 3.5") in:               T,
-    @deprecatedName('n, "Chisel 3.5") n:                 Int,
-    @deprecatedName('resetData, "Chisel 3.5") resetData: T,
-    @deprecatedName('en, "Chisel 3.5") en:               Bool
+    @deprecatedName(Symbol("in"), "Chisel 3.5") in:               T,
+    @deprecatedName(Symbol("n"), "Chisel 3.5") n:                 Int,
+    @deprecatedName(Symbol("resetData"), "Chisel 3.5") resetData: T,
+    @deprecatedName(Symbol("en"), "Chisel 3.5") en:               Bool
   ): T =
     ShiftRegisters(in, n, resetData, en).lastOption.getOrElse(in)
 }
@@ -85,9 +85,9 @@ object ShiftRegisters {
     * @param en enable the shift
     */
   def apply[T <: Data](
-    @deprecatedName('in, "Chisel 3.5") in: T,
-    @deprecatedName('n, "Chisel 3.5") n:   Int,
-    @deprecatedName('en, "Chisel 3.5") en: Bool = true.B
+    @deprecatedName(Symbol("in"), "Chisel 3.5") in: T,
+    @deprecatedName(Symbol("n"), "Chisel 3.5") n:   Int,
+    @deprecatedName(Symbol("en"), "Chisel 3.5") en: Bool = true.B
   ): Seq[T] =
     Seq.iterate(in, n + 1)(util.RegEnable(_, en)).drop(1)
 
@@ -99,10 +99,10 @@ object ShiftRegisters {
     * @param en        enable the shift
     */
   def apply[T <: Data](
-    @deprecatedName('in, "Chisel 3.5") in:               T,
-    @deprecatedName('n, "Chisel 3.5") n:                 Int,
-    @deprecatedName('resetData, "Chisel 3.5") resetData: T,
-    @deprecatedName('en, "Chisel 3.5") en:               Bool
+    @deprecatedName(Symbol("in"), "Chisel 3.5") in:               T,
+    @deprecatedName(Symbol("n"), "Chisel 3.5") n:                 Int,
+    @deprecatedName(Symbol("resetData"), "Chisel 3.5") resetData: T,
+    @deprecatedName(Symbol("en"), "Chisel 3.5") en:               Bool
   ): Seq[T] =
     Seq.iterate(in, n + 1)(util.RegEnable(_, resetData, en)).drop(1)
 }

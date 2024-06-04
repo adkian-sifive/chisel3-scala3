@@ -7,6 +7,7 @@ import chisel3.stage.NoRunFirrtlCompilerAnnotation
 import firrtl.AnnotationSeq
 import firrtl.options.{Dependency, Phase}
 import firrtl.stage.FirrtlStage
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 
 /** Run [[firrtl.stage.FirrtlStage]] if a [[chisel3.stage.NoRunFirrtlCompilerAnnotation]] is not present.
   */

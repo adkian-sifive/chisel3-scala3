@@ -2,6 +2,7 @@
 
 package chisel3.stage
 
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.{
   ir => fir,
   AnnotationSeq,

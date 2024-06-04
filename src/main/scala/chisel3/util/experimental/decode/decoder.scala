@@ -7,6 +7,7 @@ import chisel3.experimental.{annotate, ChiselAnnotation}
 import chisel3.util.{pla, BitPat}
 import chisel3.util.experimental.{getAnnotations, BitSet}
 import chisel3.internal.Builder
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.annotations.Annotation
 import logger.LazyLogging
 

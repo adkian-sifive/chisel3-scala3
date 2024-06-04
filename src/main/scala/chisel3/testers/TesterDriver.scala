@@ -12,6 +12,7 @@ import firrtl.annotations.NoTargetAnnotation
 import firrtl.options.{Dependency, Phase, PhaseManager, TargetDirAnnotation, Unserializable}
 import firrtl.stage.{FirrtlCircuitAnnotation, FirrtlStage}
 import firrtl.transforms.BlackBoxSourceHelper.writeResourceToDirectory
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 
 object TesterDriver extends BackendCompilationUtilities {
 

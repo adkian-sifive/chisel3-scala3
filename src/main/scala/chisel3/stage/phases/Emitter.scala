@@ -4,11 +4,12 @@ package chisel3.stage.phases
 
 import firrtl.{AnnotationSeq, EmittedFirrtlCircuit, EmittedFirrtlCircuitAnnotation}
 import firrtl.annotations.DeletedAnnotation
-import firrtl.options.{Dependency, Phase, StageOptions}
+import firrtl.options.{Dependency, Phase, StageOptions, StageOptionsView}
 import firrtl.options.Viewer.view
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 
 import chisel3.internal.firrtl.{Emitter => OldEmitter}
-import chisel3.stage.{ChiselCircuitAnnotation, ChiselOptions}
+import chisel3.stage.{ChiselCircuitAnnotation, ChiselOptions, ChiselOptionsView}
 
 import java.io.{File, FileWriter}
 

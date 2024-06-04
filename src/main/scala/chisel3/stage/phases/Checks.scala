@@ -4,6 +4,7 @@ package chisel3.stage.phases
 
 import chisel3.stage.{ChiselOutputFileAnnotation, NoRunFirrtlCompilerAnnotation, PrintFullStackTraceAnnotation}
 
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.AnnotationSeq
 import firrtl.annotations.Annotation
 import firrtl.options.{Dependency, OptionsException, Phase}

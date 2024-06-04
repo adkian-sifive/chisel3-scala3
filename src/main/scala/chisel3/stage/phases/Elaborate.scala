@@ -10,8 +10,10 @@ import chisel3.stage.{
   ChiselGeneratorAnnotation,
   ChiselOptions,
   DesignAnnotation,
-  ThrowOnFirstErrorAnnotation
+  ThrowOnFirstErrorAnnotation,
+  ChiselOptionsView
 }
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.AnnotationSeq
 import firrtl.options.Phase
 import firrtl.options.Viewer.view

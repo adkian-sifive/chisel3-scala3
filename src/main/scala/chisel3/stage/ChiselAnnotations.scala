@@ -2,6 +2,7 @@
 
 package chisel3.stage
 
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.annotations.{Annotation, NoTargetAnnotation}
 import firrtl.options.{
   BufferedCustomFileEmission,

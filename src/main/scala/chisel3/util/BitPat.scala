@@ -2,15 +2,13 @@
 
 package chisel3.util
 
-import scala.language.experimental.macros
 import chisel3._
-import chisel3.internal.sourceinfo.{SourceInfo, SourceInfoTransform}
 import scala.collection.mutable
 import scala.util.hashing.MurmurHash3
 
 object BitPat {
 
-  private[chisel3] implicit val bitPatOrder = new Ordering[BitPat] {
+  private[chisel3] implicit val bitPatOrder: Ordering[BitPat] = new Ordering[BitPat] {
     import scala.math.Ordered.orderingToOrdered
     def compare(x: BitPat, y: BitPat): Int = (x.getWidth, x.value, x.mask).compare(y.getWidth, y.value, y.mask)
   }
@@ -101,19 +99,10 @@ object BitPat {
     apply("b" + x.litValue.toString(2).reverse.padTo(len, "0").reverse.mkString)
   }
 
-  implicit class fromUIntToBitPatComparable(x: UInt) extends SourceInfoDoc {
-    import internal.sourceinfo.{SourceInfo, SourceInfoTransform}
+  implicit class fromUIntToBitPatComparable(x: UInt) {
+    def ===(that: BitPat): Bool = that === x
 
-    import scala.language.experimental.macros
-
-    final def ===(that: BitPat): Bool = macro SourceInfoTransform.thatArg
-    final def =/=(that: BitPat): Bool = macro SourceInfoTransform.thatArg
-
-    /** @group SourceInfoTransformMacro */
-    def do_===(that: BitPat)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = that === x
-
-    /** @group SourceInfoTransformMacro */
-    def do_=/=(that: BitPat)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = that =/= x
+    def =/=(that: BitPat): Bool = that =/= x
   }
 }
 
@@ -240,8 +229,7 @@ package experimental {
   * }}}
   */
 sealed class BitPat(val value: BigInt, val mask: BigInt, val width: Int)
-    extends util.experimental.BitSet
-    with SourceInfoDoc {
+    extends util.experimental.BitSet {
   import chisel3.util.experimental.BitSet
   def terms = Set(this)
 
@@ -249,39 +237,29 @@ sealed class BitPat(val value: BigInt, val mask: BigInt, val width: Int)
     * Get specified width of said BitPat
     */
   override def getWidth: Int = width
-  def apply(x:  Int): BitPat = macro SourceInfoTransform.xArg
-  def apply(x:  Int, y: Int): BitPat = macro SourceInfoTransform.xyArg
-  def ===(that: UInt):   Bool = macro SourceInfoTransform.thatArg
-  def =/=(that: UInt):   Bool = macro SourceInfoTransform.thatArg
-  def ##(that:  BitPat): BitPat = macro SourceInfoTransform.thatArg
 
   override def hashCode: Int =
     MurmurHash3.seqHash(Seq(this.value, this.mask, this.width))
 
-  /** @group SourceInfoTransformMacro */
-  def do_apply(x: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): BitPat = {
-    do_apply(x, x)
+  def apply(x: Int): BitPat = {
+    apply(x, x)
   }
 
-  /** @group SourceInfoTransformMacro */
-  def do_apply(x: Int, y: Int)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): BitPat = {
+  def apply(x: Int, y: Int): BitPat = {
     require(width > x && y >= 0, s"Invalid bit range ($x, $y), index should be bounded by (${width - 1}, 0)")
     require(x >= y, s"Invalid bit range ($x, $y), x should be greater or equal to y.")
     BitPat(s"b${rawString.slice(width - x - 1, width - y)}")
   }
 
-  /** @group SourceInfoTransformMacro */
-  def do_===(that: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
+  def ===(that: UInt): Bool = {
     value.asUInt === (that & mask.asUInt)
   }
 
-  /** @group SourceInfoTransformMacro */
-  def do_=/=(that: UInt)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
+  def =/=(that: UInt): Bool = {
     !(this === that)
   }
 
-  /** @group SourceInfoTransformMacro */
-  def do_##(that: BitPat)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): BitPat = {
+  def ##(that: BitPat): BitPat = {
     new BitPat((value << that.getWidth) + that.value, (mask << that.getWidth) + that.mask, this.width + that.getWidth)
   }
 

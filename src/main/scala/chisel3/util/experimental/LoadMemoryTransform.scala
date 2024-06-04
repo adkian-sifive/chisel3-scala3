@@ -4,6 +4,7 @@ package chisel3.util.experimental
 
 import chisel3._
 import chisel3.experimental.{annotate, ChiselAnnotation, RunFirrtlTransform}
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.annotations._
 import firrtl.ir.{Module => _, _}
 import firrtl.transforms.BlackBoxInlineAnno

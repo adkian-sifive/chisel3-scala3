@@ -119,7 +119,7 @@ object Pipe {
     * @return $returnType
     */
   @nowarn("cat=deprecation&msg=TransitName")
-  def apply[T <: Data](enqValid: Bool, enqBits: T, latency: Int)(implicit compileOptions: CompileOptions): Valid[T] = {
+  def apply[T <: Data](enqValid: Bool, enqBits: T, latency: Int): Valid[T] = {
     require(latency >= 0, "Pipe latency must be greater than or equal to zero!")
     if (latency == 0) {
       val out = Wire(Valid(chiselTypeOf(enqBits)))
@@ -129,7 +129,7 @@ object Pipe {
     } else {
       val v = RegNext(enqValid, false.B)
       val b = RegEnable(enqBits, enqValid)
-      val out = apply(v, b, latency - 1)(compileOptions)
+      val out = apply(v, b, latency - 1)
 
       TransitName.withSuffix("Pipe_valid")(out, v)
       TransitName.withSuffix("Pipe_bits")(out, b)
@@ -141,8 +141,8 @@ object Pipe {
     * @param enqBits the data (must be a hardware type)
     * @return $returnType
     */
-  def apply[T <: Data](enqValid: Bool, enqBits: T)(implicit compileOptions: CompileOptions): Valid[T] = {
-    apply(enqValid, enqBits, 1)(compileOptions)
+  def apply[T <: Data](enqValid: Bool, enqBits: T): Valid[T] = {
+    apply(enqValid, enqBits, 1)
   }
 
   /** Generate a pipe for a [[Valid]] interface
@@ -150,8 +150,8 @@ object Pipe {
     * @param latency the number of pipeline stages
     * @return $returnType
     */
-  def apply[T <: Data](enq: Valid[T], latency: Int = 1)(implicit compileOptions: CompileOptions): Valid[T] = {
-    apply(enq.valid, enq.bits, latency)(compileOptions)
+  def apply[T <: Data](enq: Valid[T], latency: Int = 1): Valid[T] = {
+    apply(enq.valid, enq.bits, latency)
   }
 }
 
@@ -181,7 +181,7 @@ object Pipe {
   * @see [[Queue]] and the [[Queue$ Queue factory]] for actual queues
   * @see The [[ShiftRegister$ ShiftRegister factory]] to generate a pipe without a [[Valid]] interface
   */
-class Pipe[T <: Data](val gen: T, val latency: Int = 1)(implicit compileOptions: CompileOptions) extends Module {
+class Pipe[T <: Data](val gen: T, val latency: Int = 1) extends Module {
 
   /** Interface for [[Pipe]]s composed of a [[Valid]] input and [[Valid]] output
     * @define notAQueue

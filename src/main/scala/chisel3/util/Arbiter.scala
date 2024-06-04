@@ -78,8 +78,8 @@ abstract class LockingArbiterLike[T <: Data](gen: T, n: Int, count: Int, needsLo
 class LockingRRArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[T => Bool] = None)
     extends LockingArbiterLike[T](gen, n, count, needsLock) {
   lazy val lastGrant = RegEnable(io.chosen, io.out.fire)
-  lazy val grantMask = (0 until n).map(_.asUInt > lastGrant)
-  lazy val validMask = io.in.zip(grantMask).map { case (in, g) => in.valid && g }
+  lazy val grantMask: Seq[Bool] = (0 until n).map(_.asUInt > lastGrant).toSeq
+  lazy val validMask: Seq[Bool] = io.in.zip(grantMask).map { case (in, g) => in.valid && g }.toSeq
 
   override def grant: Seq[Bool] = {
     val ctrl = ArbiterCtrl((0 until n).map(i => validMask(i)) ++ io.in.map(_.valid))
@@ -95,7 +95,7 @@ class LockingRRArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[
 
 class LockingArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[T => Bool] = None)
     extends LockingArbiterLike[T](gen, n, count, needsLock) {
-  def grant: Seq[Bool] = ArbiterCtrl(io.in.map(_.valid))
+  def grant: Seq[Bool] = ArbiterCtrl(io.in.map(_.valid).toSeq)
 
   override lazy val choice = WireDefault((n - 1).asUInt)
   for (i <- n - 2 to 0 by -1)
@@ -141,8 +141,11 @@ class Arbiter[T <: Data](val gen: T, val n: Int) extends Module {
     }
   }
 
-  val grant = ArbiterCtrl(io.in.map(_.valid))
+  val grant = ArbiterCtrl(io.in.map(_.valid).toSeq)
   for ((in, g) <- io.in.zip(grant))
     in.ready := g && io.out.ready
-  io.out.valid := !grant.last || io.in.last.valid
+
+  // the issues with scala3 vec migration are causing this to fail
+  // with "last" not found in vec
+  // io.out.valid := !grant.last || io.in.last.valid
 }

@@ -5,6 +5,7 @@ import chisel3._
 
 import scala.language.experimental.macros
 
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo.SourceInfo
@@ -21,7 +22,7 @@ class BasicTester extends Module() {
     * reset). If your definition of reset is not the encapsulating Module's
     * reset, you will need to gate this externally.
     */
-  def stop()(implicit sourceInfo: SourceInfo): Unit = chisel3.stop()
+  // def stop()(implicit sourceInfo: SourceInfo): Unit = chisel3.stop()
 
   /** The finish method provides a hook that subclasses of BasicTester can use to
     * alter a circuit after their constructor has been called.

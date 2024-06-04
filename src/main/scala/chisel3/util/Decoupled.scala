@@ -22,7 +22,6 @@ import scala.annotation.nowarn
 abstract class ReadyValidIO[+T <: Data](gen: T) extends Bundle {
   // Compatibility hack for rocket-chip
   private val genType = (DataMirror.internal.isSynthesizable(gen), chisel3.internal.Builder.currentModule) match {
-    case (true, Some(module: Module)) if !module.compileOptions.declaredTypeMustBeUnbound => chiselTypeOf(gen)
     case _ => gen
   }
 
@@ -253,20 +252,12 @@ class Queue[T <: Data](
   val flow:           Boolean = false,
   val useSyncReadMem: Boolean = false,
   val hasFlush:       Boolean = false
-)(
-  implicit compileOptions: chisel3.CompileOptions)
-    extends Module() {
+) extends Module() {
   require(entries > -1, "Queue must have non-negative number of entries")
   require(entries != 0, "Use companion object Queue.apply for zero entries")
-  val genType = if (compileOptions.declaredTypeMustBeUnbound) {
+  val genType = {
     requireIsChiselType(gen)
     gen
-  } else {
-    if (DataMirror.internal.isSynthesizable(gen)) {
-      chiselTypeOf(gen)
-    } else {
-      gen
-    }
   }
 
   val io = IO(new QueueIO(genType, entries, hasFlush))

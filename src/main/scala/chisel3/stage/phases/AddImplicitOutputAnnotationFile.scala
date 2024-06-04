@@ -2,6 +2,7 @@
 
 package chisel3.stage.phases
 
+import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import chisel3.stage.ChiselCircuitAnnotation
 import firrtl.AnnotationSeq
 import firrtl.options.{Dependency, OutputAnnotationFileAnnotation, Phase}

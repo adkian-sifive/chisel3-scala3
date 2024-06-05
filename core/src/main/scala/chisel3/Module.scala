@@ -122,9 +122,9 @@ object Module {
                 assignCompatDir(vec.sample_element) // This is used in fromChildren computation
             }
           case SpecifiedDirection.Input | SpecifiedDirection.Output =>
-          // forced assign, nothing to do
-          // The .bind algorithm will automatically assign the direction here.
-          // Thus, no implicit assignment is necessary.
+            // forced assign, nothing to do
+            // The .bind algorithm will automatically assign the direction here.
+            // Thus, no implicit assignment is necessary.
         }
     }
   }
@@ -191,7 +191,47 @@ package experimental {
 package internal {
   import chisel3.experimental.BaseModule
 
-  object BaseModule {}
+  object BaseModule {
+    private[chisel3] class ModuleClone[T <: BaseModule](val getProto: T) extends PseudoModule {
+      override def toString = s"ModuleClone(${getProto})"
+      // Do not call default addId function, which may modify a module that is already "closed"
+      def getPorts = _portsRecord
+      // ClonePorts that hold the bound ports for this module
+      // Used for setting the refs of both this module and the Record
+      private[BaseModule] var _portsRecord: Record = scala.compiletime.uninitialized
+      // Don't generate a component, but point to the one for the cloned Module
+      private[chisel3] def generateComponent(): Option[Component] = {
+        require(!_closed, "Can't generate module more than once")
+        _closed = true
+        _component = getProto._component
+        None
+      }
+      // Maps proto ports to module clone's ports
+      private[chisel3] lazy val ioMap: Map[Data, Data] = {
+        val name2Port = getPorts.elements
+        getProto.getChiselPorts.map {
+          case (name, data) => data -> name2Port(name)
+        }.toMap
+      }
+
+      private[chisel3] def setRefAndPortsRef(namespace: Namespace): Unit = {
+        val record = _portsRecord
+        // Use .forceName to re-use default name resolving behavior
+        record.forceName(default = this.desiredName, namespace)
+        // Now take the Ref that forceName set and convert it to the correct Arg
+        val instName = record.getRef match {
+          case Ref(name) => name
+          case bad       => throwException(s"Internal Error! Cloned-module Record $record has unexpected ref $bad")
+        }
+        // Set both the record and the module to have the same instance name
+        val ref = ModuleCloneIO(getProto, instName)
+        record.setRef(ref, force = true) // force because we did .forceName first
+        this.setRef(Ref(instName))
+      }
+
+      private[chisel3] override def initializeInParent(): Unit = ()
+    }
+  }
 }
 
 package experimental {
@@ -248,6 +288,25 @@ package experimental {
       _ids.toSeq
     }
 
+    private val _ports = new ArrayBuffer[Data]()
+
+    // getPorts unfortunately already used for tester compatibility
+    protected[chisel3] def getModulePorts = {
+      require(_closed, "Can't get ports before module close")
+      _ports.toSeq
+    }
+
+    // These methods allow checking some properties of ports before the module is closed,
+    // mainly for compatibility purposes.
+    protected def portsContains(elem: Data): Boolean = _ports contains elem
+
+    // This is dangerous because it can be called before the module is closed and thus there could
+    // be more ports and names have not yet been finalized.
+    // This should only to be used during the process of closing when it is safe to do so.
+    private[chisel3] def findPort(name: String): Option[Data] = _ports.find(_.seedOpt.contains(name))
+
+    protected def portsSize: Int = _ports.size
+
     /** Generates the FIRRTL Component (Module or Blackbox) of this Module.
       * Also closes the module so no more construction can happen inside.
       */
@@ -257,6 +316,26 @@ package experimental {
       */
     private[chisel3] def initializeInParent(): Unit
 
+    private[chisel3] def namePorts(names: HashMap[HasId, String]): Unit = {
+      for (port <- getModulePorts) {
+        port._computeName(None).orElse(names.get(port)) match {
+          case Some(name) =>
+            if (_namespace.contains(name)) {
+              Builder.error(
+                s"""Unable to name port $port to "$name" in $this,""" +
+                  " name is already taken by another port!"
+              )
+            }
+            port.setRef(ModuleIO(this, _namespace.name(name)))
+          case None =>
+            Builder.error(
+              s"Unable to name port $port in $this, " +
+                "try making it a public field of the Module"
+            )
+            port.setRef(ModuleIO(this, "<UNNAMED>"))
+        }
+      }
+    }
     //
     // Chisel Internals
     //
@@ -330,6 +409,22 @@ package experimental {
       }
     }
 
+    /**
+      * Internal API. Returns a list of this module's generated top-level ports as a map of a String
+      * (FIRRTL name) to the IO object. Only valid after the module is closed.
+      *
+      * Note: for BlackBoxes (but not ExtModules), this returns the contents of the top-level io
+      * object, consistent with what is emitted in FIRRTL.
+      *
+      * TODO: Use SeqMap/VectorMap when those data structures become available.
+      */
+    private[chisel3] def getChiselPorts: Seq[(String, Data)] = {
+      require(_closed, "Can't get ports before module close")
+      _component.get.ports.map { port =>
+        (port.id.getRef.asInstanceOf[ModuleIO].name, port.id)
+      }
+    }
+
     /** Called at the Module.apply(...) level after this Module has finished elaborating.
       * Returns a map of nodes -> names, for named nodes.
       *
@@ -387,6 +482,7 @@ package experimental {
       Module.assignCompatDir(iodef)
 
       iodef.bind(PortBinding(this))
+      _ports += iodef
     }
 
     /** Private accessor for _bindIoInPlace */

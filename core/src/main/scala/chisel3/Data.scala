@@ -211,7 +211,7 @@ package experimental {
       * // )
       * }}}
       */
-    def modulePorts(target: BaseModule): Seq[(String, Data)] = Seq.empty
+    def modulePorts(target: BaseModule): Seq[(String, Data)] = target.getChiselPorts
 
     /** Returns a recursive representation of a module's ports with underscore-qualified names
       * {{{

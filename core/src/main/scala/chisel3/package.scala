@@ -342,7 +342,7 @@ package object chisel3 {
     "duplicated with DataMirror.fullModulePorts, this returns an internal API, will be removed in Chisel 3.6",
     "Chisel 3.5"
   )
-  def getModulePorts(m: Module): Seq[Port] = Seq.empty
+  def getModulePorts(m: Module): Seq[Port] = m.getPorts
 
   class BindingException(message: String) extends ChiselException(message)
 

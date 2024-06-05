@@ -6,6 +6,7 @@ import scala.util.Try
 import scala.annotation.nowarn
 import chisel3.experimental.BaseModule
 import chisel3.internal._
+import chisel3.internal.BaseModule.ModuleClone
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
 import _root_.firrtl.annotations.{IsModule, ModuleTarget}
@@ -34,6 +35,14 @@ abstract class RawModule extends BaseModule {
     _component.get.asInstanceOf[DefModule].commands
   }
 
+  //
+  // Other Internal Functions
+  //
+  private var _firrtlPorts: Option[Seq[firrtl.Port]] = None
+
+  @deprecated("Use DataMirror.modulePorts instead. this API will be removed in Chisel 3.6", "Chisel 3.5")
+  lazy val getPorts: Seq[Port] = _firrtlPorts.get
+
   // This could be factored into a common utility
   private def canBeNamed(id: HasId): Boolean = id match {
     case d: Data =>
@@ -55,6 +64,9 @@ abstract class RawModule extends BaseModule {
     _closed = true
 
     val names = nameIds(classOf[RawModule])
+
+    // Ports get first naming priority, since they are part of a Module's IO spec
+    namePorts(names)
 
     // Then everything else gets named
     val warnReflectiveNaming = Builder.warnReflectiveNaming
@@ -80,6 +92,7 @@ abstract class RawModule extends BaseModule {
     // All suggestions are in, force names to every node.
     for (id <- getIds) {
       id match {
+        case id: ModuleClone[_]   => id.setRefAndPortsRef(_namespace) // special handling
         case id: BaseModule       => id.forceName(default = id.desiredName, _namespace)
         case id: MemBase[_]       => id.forceName(default = "MEM", _namespace)
         // removed till macros are fixed
@@ -109,7 +122,28 @@ abstract class RawModule extends BaseModule {
 
     closeUnboundIds(names)
 
-    val component = DefModule(this, name, null, Seq.empty)
+    val firrtlPorts = getModulePorts.map { port =>
+      // Special case Vec to make FIRRTL emit the direction of its
+      // element.
+      // Just taking the Vec's specifiedDirection is a bug in cases like
+      // Vec(Flipped()), since the Vec's specifiedDirection is
+      // Unspecified.
+      val direction = port match {
+        case v: Vec[_] =>
+          v.specifiedDirection match {
+            case SpecifiedDirection.Input       => SpecifiedDirection.Input
+            case SpecifiedDirection.Output      => SpecifiedDirection.Output
+            case SpecifiedDirection.Flip        => SpecifiedDirection.flip(v.sample_element.specifiedDirection)
+            case SpecifiedDirection.Unspecified => v.sample_element.specifiedDirection
+          }
+        case _ => port.specifiedDirection
+      }
+
+      Port(port, direction)
+    }
+    _firrtlPorts = Some(firrtlPorts)
+
+    val component = DefModule(this, name, firrtlPorts, _commands.result())
     _component = Some(component)
     _component
   }

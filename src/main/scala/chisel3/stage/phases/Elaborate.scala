@@ -45,9 +45,9 @@ class Elaborate extends Phase {
         /* if any throwable comes back and we're in "stack trace trimming" mode, then print an error and trim the stack trace
          */
         case scala.util.control.NonFatal(a) =>
-          if (!chiselOptions.printFullStackTrace) {
-            a.trimStackTraceToUserCode()
-          }
+          // if (!chiselOptions.printFullStackTrace) {
+          //   a.trimStackTraceToUserCode()
+          // }
           throw (a)
       }
     case a => Some(a)

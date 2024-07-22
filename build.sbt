@@ -39,6 +39,11 @@ lazy val core = (project in file("core")).
       "-unchecked",
     )
   )
+  .dependsOn(macros)
+
+lazy val macros = (project in file("macros"))
+  .settings(name := "chisel-macros")
+  .settings(commonSettings: _*)
 
 // This will always be the root project, even if we are a sub-project.
 lazy val root = RootProject(file("."))

@@ -324,7 +324,7 @@ private class Error(msg: => String, line: Option[StackTraceElement]) extends Log
   def format:           String = tag("error", Console.RED)
 }
 
-private class Warning(msg: => String, line: Option[StackTraceElement]) extends LogEntry(msg, line) {
+class Warning(msg: => String, line: Option[StackTraceElement]) extends LogEntry(msg, line) {
   def format: String = tag("warn", Console.YELLOW)
 }
 

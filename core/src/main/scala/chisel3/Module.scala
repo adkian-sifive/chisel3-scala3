@@ -242,6 +242,13 @@ package experimental {
   abstract class BaseModule extends HasId {
     _parent.foreach(_.addId(this))
 
+    // Set if the returned top-level module of a nested call to the Chisel Builder, see Definition.apply
+    private var _circuitVar:       BaseModule = null // using nullable var for better memory usage
+    private[chisel3] def _circuit: Option[BaseModule] = Option(_circuitVar)
+    private[chisel3] def _circuit_=(target: Option[BaseModule]): Unit = {
+      _circuitVar = target.getOrElse(null)
+    }
+
     //
     // Builder Internals - this tracks which Module RTL construction belongs to.
     //
@@ -409,6 +416,27 @@ package experimental {
       }
     }
 
+  /** Returns a FIRRTL ReferenceTarget that references this object, relative to an optional root.
+    *
+    * If `root` is defined, the target is a hierarchical path starting from `root`.
+    *
+    * If `root` is not defined, the target is a hierarchical path equivalent to `toAbsoluteTarget`.
+    *
+    * @note If `root` is defined, and has not finished elaboration, this must be called within `atModuleBodyEnd`.
+    * @note The NamedComponent must be a descendant of `root`, if it is defined.
+    * @note This doesn't have special handling for Views.
+    */
+    final def toRelativeTarget(root: Option[BaseModule]): ReferenceTarget = {
+      val localTarget = toTarget
+      def makeTarget(p: BaseModule) =
+        p.toRelativeTarget(root).ref(localTarget.ref).copy(component = localTarget.component)
+      _parent match {
+        // case Some(ViewParent) => makeTarget(reifyParent) TODO add with datamirror
+        case Some(parent)     => makeTarget(parent)
+        case None             => localTarget
+      }
+    }
+
     /**
       * Internal API. Returns a list of this module's generated top-level ports as a map of a String
       * (FIRRTL name) to the IO object. Only valid after the module is closed.
@@ -452,17 +480,6 @@ package experimental {
       }
 
       names
-    }
-
-    /** Invokes _onModuleClose on HasIds found via reflection but not bound to hardware
-      * (thus not part of _ids)
-      * This maintains old naming behavior for non-hardware Data
-      */
-    private[chisel3] def closeUnboundIds(names: HashMap[HasId, String]): Unit = {
-      val idLookup = _ids.toSet
-      for ((id, _) <- names if !idLookup(id)) {
-        id._onModuleClose
-      }
     }
 
     /** Compatibility function. Allows Chisel2 code which had ports without the IO wrapper to

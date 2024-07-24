@@ -209,6 +209,13 @@ case class Index(imm: Arg, value: Arg) extends Arg {
   override def localName: String = s"${imm.localName}[${value.localName}]"
 }
 
+// Like index above, except the index is a literal, used for elements of Vecs
+case class LitIndex(imm: Arg, value: Int) extends Arg {
+  def name: String = s"[$value]"
+  override def contextualName(ctx: Component): String = s"${imm.contextualName(ctx)}[$value]"
+  override def localName: String = s"${imm.localName}[$value]"
+}
+
 object Width {
   def apply(x: Int): Width = KnownWidth(x)
   def apply(): Width = UnknownWidth()

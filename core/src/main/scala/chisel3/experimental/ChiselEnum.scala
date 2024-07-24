@@ -7,7 +7,7 @@ import chisel3._
 import chisel3.internal.Builder.pushOp
 import chisel3.internal.firrtl.PrimOp._
 import chisel3.internal.firrtl._
-import chisel3.internal.{throwException, Binding, Builder, ChildBinding, ConstrainedBinding, InstanceId}
+import chisel3.internal.{throwException, Binding, Builder, ChildBinding, ConstrainedBinding}
 import firrtl.annotations._
 
 object EnumAnnotations {

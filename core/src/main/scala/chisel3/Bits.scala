@@ -553,7 +553,7 @@ sealed class UInt private[chisel3] (width: Width) extends Bits(width) with Num[U
     "Chisel 3.5"
   )
 
-def unary_! : Bool = this === 0.U(1.W)
+  def unary_! : Bool = this === 0.U(1.W)
 
   override def <<(that: Int): UInt =
     binop(UInt(this.width + that), ShiftLeftOp, validateShiftAmount(that))

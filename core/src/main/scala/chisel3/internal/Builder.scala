@@ -11,13 +11,14 @@ import chisel3.internal.naming._
 import _root_.firrtl.annotations.{CircuitName, ComponentName, IsMember, ModuleName, Named, ReferenceTarget}
 import _root_.firrtl.annotations.AnnotationUtils.validComponentName
 import _root_.firrtl.{AnnotationSeq, RenameMap}
+import _root_.firrtl.{ir => fir}
 import chisel3.internal.Builder.Prefix
 import logger.LazyLogging
 
 import scala.collection.mutable
 import scala.annotation.tailrec
 
-private[chisel3] class Namespace(keywords: Set[String]) {
+private[chisel3] class Namespace(keywords: Set[String], separator: Char = '_') {
   // This HashMap is compressed, not every name in the namespace is present here.
   // If the same name is requested multiple times, it only takes 1 entry in the HashMap and the
   // value is incremented for each time the name is requested.
@@ -25,28 +26,18 @@ private[chisel3] class Namespace(keywords: Set[String]) {
   // checking if a name is present in the Namespace is more complex than just checking the HashMap,
   // see getIndex below.
   private val names = collection.mutable.HashMap[String, Long]()
-  def copyTo(other: Namespace): Unit = names.foreach { case (s: String, l: Long) => other.names(s) = l }
   for (keyword <- keywords)
     names(keyword) = 1
 
   @tailrec
   private def rename(n: String, index: Long): String = {
-    val tryName = s"${n}_${index}"
+    val tryName = s"${n}${separator}${index}"
     if (names.contains(tryName)) {
       rename(n, index + 1)
     } else {
       names(n) = index + 1
       tryName
     }
-  }
-
-  private def sanitize(s: String, leadingDigitOk: Boolean = false): String = {
-    // TODO what character set does FIRRTL truly support? using ANSI C for now
-    def legalStart(c: Char) = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
-    def legal(c:      Char) = legalStart(c) || (c >= '0' && c <= '9')
-    val res = if (s.forall(legal)) s else s.filter(legal)
-    val headOk = (!res.isEmpty) && (leadingDigitOk || legalStart(res.head))
-    if (headOk) res else s"_$res"
   }
 
   /** Checks if `n` ends in `_\d+` and returns the substring before `_` if so, null otherwise */
@@ -58,8 +49,8 @@ private[chisel3] class Namespace(keywords: Set[String]) {
       i -= 1
     }
     // Will get i == 0 for all digits or _\d+ with empty prefix, those have no prefix so returning 0 is correct
-    if (i == n.size) 0 // no digits
-    else if (n(i) != '_') 0 // no _
+    if (i >= (n.size - 1)) 0 // no digits
+    else if (n(i) != separator) 0 // no _
     else i
   }
 
@@ -99,6 +90,7 @@ private[chisel3] class Namespace(keywords: Set[String]) {
 private[chisel3] object Namespace {
 
   /** Constructs an empty Namespace */
+  def empty(separator: Char): Namespace = new Namespace(Set.empty[String], separator)
   def empty: Namespace = new Namespace(Set.empty[String])
 }
 
@@ -111,40 +103,12 @@ private[chisel3] class IdGen {
   def value: Long = counter
 }
 
-/** Public API to access Node/Signal names.
-  * currently, the node's name, the full path name, and references to its parent Module and component.
-  * These are only valid once the design has been elaborated, and should not be used during its construction.
-  */
-trait InstanceId {
-  def instanceName:   String
-  def pathName:       String
-  def parentPathName: String
-  def parentModName:  String
-
-  /** Returns a FIRRTL Named that refers to this object in the elaborated hardware graph */
-  def toNamed: Named
-
-  /** Returns a FIRRTL IsMember that refers to this object in the elaborated hardware graph */
-  def toTarget: IsMember
-
-  /** Returns a FIRRTL IsMember that refers to the absolute path to this object in the elaborated hardware graph */
-  def toAbsoluteTarget: IsMember
-}
-
-private[chisel3] trait HasId extends InstanceId {
-  private[chisel3] def _onModuleClose: Unit = {}
+private[chisel3] trait HasId extends chisel3.InstanceId {
   // using nullable var for better memory usage
   private var _parentVar:       BaseModule = Builder.currentModule.getOrElse(null)
   private[chisel3] def _parent: Option[BaseModule] = Option(_parentVar)
   private[chisel3] def _parent_=(target: Option[BaseModule]): Unit = {
     _parentVar = target.getOrElse(null)
-  }
-
-  // Set if the returned top-level module of a nested call to the Chisel Builder, see Definition.apply
-  private var _circuitVar:       BaseModule = null // using nullable var for better memory usage
-  private[chisel3] def _circuit: Option[BaseModule] = Option(_circuitVar)
-  private[chisel3] def _circuit_=(target: Option[BaseModule]): Unit = {
-    _circuitVar = target.getOrElse(null)
   }
 
   private[chisel3] val _id: Long = Builder.idGen.next
@@ -153,24 +117,17 @@ private[chisel3] trait HasId extends InstanceId {
   override def hashCode: Int = super.hashCode()
   override def equals(that: Any): Boolean = super.equals(that)
 
-  // Contains suggested seed (user-decided seed)
+  // Did the user suggest a name? This overrides names suggested by the compiler plugin.
+  private var _nameIsSuggested: Boolean = false
+  // Contains name seed (either user suggested or generated by the plugin).
   private var suggested_seedVar: String = null // using nullable var for better memory usage
   private def suggested_seed:    Option[String] = Option(suggested_seedVar)
-
-  // Contains the seed computed automatically by the compiler plugin
-  private var auto_seedVar: String = null // using nullable var for better memory usage
-  private def auto_seed:    Option[String] = Option(auto_seedVar)
 
   // Prefix for use in naming
   // - Defaults to prefix at time when object is created
   // - Overridden when [[suggestSeed]] or [[autoSeed]] is called
+  // - Note that suggestSeed does *not* prevent autoSeed from changing this
   private var naming_prefix: Prefix = Builder.getPrefix
-
-  // Post-seed hooks called to carry the suggested seeds to other candidates as needed
-  private var suggest_postseed_hooks: List[String => Unit] = Nil
-
-  // Post-seed hooks called to carry the auto seeds to other candidates as needed
-  private var auto_postseed_hooks: List[String => Unit] = Nil
 
   /** Takes the last seed suggested. Multiple calls to this function will take the last given seed, unless
     * this HasId is a module port (see overridden method in Data.scala).
@@ -187,8 +144,9 @@ private[chisel3] trait HasId extends InstanceId {
   private[chisel3] def autoSeed(seed: String): this.type = forceAutoSeed(seed)
   // Bypass the overridden behavior of autoSeed in [[Data]], apply autoSeed even to ports
   private[chisel3] def forceAutoSeed(seed: String): this.type = {
-    auto_seedVar = seed
-    for (hook <- auto_postseed_hooks.reverse) { hook(seed) }
+    if (!_nameIsSuggested) {
+      suggested_seedVar = seed
+    }
     naming_prefix = Builder.getPrefix
     this
   }
@@ -208,31 +166,20 @@ private[chisel3] trait HasId extends InstanceId {
     * If the final computed name conflicts with another name, it may get uniquified by appending
     * a digit at the end.
     *
-    * Is a higher priority than [[autoSeed]], in that regardless of whether [[autoSeed]]
+    * Is a higher priority than `autoSeed`, in that regardless of whether `autoSeed`
     * was called, [[suggestName]] will always take precedence.
     *
     * @param seed The seed for the name of this component
     * @return this object
     */
   def suggestName(seed: => String): this.type = {
-    if (suggested_seed.isEmpty) {
+    if (!_nameIsSuggested) {
       suggested_seedVar = seed
       // Only set the prefix if a seed hasn't been suggested
       naming_prefix = Builder.getPrefix
-      for (hook <- suggest_postseed_hooks.reverse) { hook(seed) }
+      _nameIsSuggested = true
     }
     this
-  }
-
-  // Internal version of .suggestName that can override a user-suggested name
-  // This only exists for maintaining "val io" naming in compatibility-mode Modules without IO
-  // wrapping
-  private[chisel3] def forceFinalName(seed: String): this.type = {
-    // This could be called with user prefixes, ignore them
-    noPrefix {
-      suggested_seedVar = seed
-      this.suggestName(seed)
-    }
   }
 
   /** Computes the name of this HasId, if one exists
@@ -249,24 +196,47 @@ private[chisel3] trait HasId extends InstanceId {
     *
     * @return the current calculation of a name, if it exists
     */
-  private[chisel3] def seedOpt: Option[String] = suggested_seed.orElse(auto_seed)
+  private[chisel3] def seedOpt: Option[String] = suggested_seed
 
   /** @return Whether either autoName or suggestName has been called */
   def hasSeed: Boolean = seedOpt.isDefined
 
-  private[chisel3] def hasAutoSeed: Boolean = auto_seed.isDefined
-
-  private[chisel3] def addSuggestPostnameHook(hook: String => Unit): Unit = suggest_postseed_hooks ::= hook
-  private[chisel3] def addAutoPostnameHook(hook:    String => Unit): Unit = auto_postseed_hooks ::= hook
-
   // Uses a namespace to convert suggestion into a true name
   // Will not do any naming if the reference already assigned.
   // (e.g. tried to suggest a name to part of a Record)
-  private[chisel3] def forceName(default: => String, namespace: Namespace): Unit =
+  private[chisel3] def forceName(
+    default:    => String,
+    namespace:  Namespace,
+    errorIfDup: Boolean = false,
+    refBuilder: String => Arg = Ref(_)
+  ): Unit =
     if (_ref.isEmpty) {
-      val candidate_name = _computeName(Some(default)).get
+      val candidate_name = _computeName(Some(default).filterNot(_ => errorIfDup)).getOrElse {
+        throwException(
+          s"Attempted to name a nameless IO port ($this): this is usually caused by instantiating an IO but not assigning it to a val.\n" +
+            s"Assign $this to a val, or explicitly call suggestName to seed a unique name"
+        )
+      }
+
+      val sanitized = sanitize(candidate_name)
       val available_name = namespace.name(candidate_name)
-      setRef(Ref(available_name))
+
+      // Check for both cases of name duplication
+      if (errorIfDup && (available_name != sanitized)) {
+        // If sanitization occurred, then the sanitized name duplicate an existing name
+        if ((candidate_name != sanitized)) {
+          Builder.error(
+            s"Attempted to name $this with an unsanitary name '$candidate_name': sanitization results in a duplicated name '$sanitized'. Please seed a more unique name"
+          )
+        } else {
+          // Otherwise the candidate name duplicates an existing name
+          Builder.error(
+            s"Attempted to name $this with a duplicated name '$candidate_name'. Use suggestName to seed a unique name"
+          )
+        }
+      }
+
+      setRef(refBuilder(available_name))
       // Clear naming prefix to free memory
       naming_prefix = Nil
     }
@@ -279,32 +249,26 @@ private[chisel3] trait HasId extends InstanceId {
       _refVar = imm
     }
   }
-  private[chisel3] def setRef(parent: HasId, name: String, opaque: Boolean = false): Unit = {
-    if (!opaque) setRef(Slot(Node(parent), name))
-    else setRef(OpaqueSlot(Node(parent)))
+  private[chisel3] def setRef(parent: Node, name: String, opaque: Boolean = false): Unit = {
+    if (!opaque) setRef(Slot(parent, name))
+    else setRef(OpaqueSlot(parent))
   }
 
-  private[chisel3] def setRef(parent: HasId, index: Int):  Unit = setRef(Index(Node(parent), ILit(index)))
-  private[chisel3] def setRef(parent: HasId, index: UInt): Unit = setRef(Index(Node(parent), index.ref))
+  private[chisel3] def setRef(parent: Node, index: Int): Unit = setRef(LitIndex(parent, index))
+  private[chisel3] def setRef(parent: Node, index: UInt): Unit = index.litOption match {
+    case Some(lit) if lit.isValidInt => setRef(LitIndex(parent, lit.intValue))
+    case _                           => setRef(Index(parent, index.ref))
+  }
   private[chisel3] def getRef:       Arg = _ref.get
   private[chisel3] def getOptionRef: Option[Arg] = _ref
 
   private def refName(c: Component): String = _ref match {
     case Some(arg) => arg.fullName(c)
-    case None      =>
-      // This is super hacky but this is just for a short term deprecation
-      // These accesses occur after Chisel elaboration so we cannot use the normal
-      // Builder.deprecated mechanism, we have to create our own one off ErrorLog and print the
-      // warning right away.
-      // It's especially bad because --warnings-as-errors does not work with these warnings
-      val errors = new ErrorLog(false)
-      val logger = new _root_.logger.Logger(this.getClass.getName)
-      val msg =
-        "Accessing the .instanceName or .toTarget of non-hardware Data is deprecated" + _errorContext + ". " +
-          "This will become an error in Chisel 3.6."
-      errors.deprecated(msg, None)
-      errors.checkpoint(logger)
-      _computeName(None).get
+    case None => {
+      throwException(
+        "You cannot access the .instanceName or .toTarget of non-hardware Data" + _errorContext
+      )
+    }
   }
 
   private[chisel3] def _errorContext: String = {
@@ -314,6 +278,7 @@ private[chisel3] trait HasId extends InstanceId {
     }
 
     val parentGuess: String = _parent match {
+      // case Some(ViewParent) => s", in module '${reifyParent.pathName}'"  TODO with datamirror
       case Some(p)          => s", in module '${p.pathName}'"
       case None             => ""
     }
@@ -345,13 +310,18 @@ private[chisel3] trait HasId extends InstanceId {
     case Some(p)          => p.name
     case None             => throwException(s"$instanceName doesn't have a parent")
   }
-  // TODO Should this be public?
-  protected def circuitName: String = _parent match {
+  def circuitName: String = _parent match {
     case None =>
-      _circuit match {
-        case None    => instanceName
-        case Some(o) => o.circuitName
+      // Only modules have circuits
+      this match {
+        case b: BaseModule =>
+          b._circuit match {
+            case Some(c) => c.circuitName
+            case None    => instanceName
+          }
+        case _ => instanceName
       }
+    // case Some(ViewParent) => reifyParent.circuitName TODO with datamirror
     case Some(p)          => p.circuitName
   }
 
@@ -414,6 +384,26 @@ private[chisel3] trait NamedComponent extends HasId {
     }
   }
 
+  /** Returns a FIRRTL ReferenceTarget that references this object, relative to an optional root.
+    *
+    * If `root` is defined, the target is a hierarchical path starting from `root`.
+    *
+    * If `root` is not defined, the target is a hierarchical path equivalent to `toAbsoluteTarget`.
+    *
+    * @note If `root` is defined, and has not finished elaboration, this must be called within `atModuleBodyEnd`.
+    * @note The NamedComponent must be a descendant of `root`, if it is defined.
+    * @note This doesn't have special handling for Views.
+    */
+  final def toRelativeTarget(root: Option[BaseModule]): ReferenceTarget = {
+    val localTarget = toTarget
+    def makeTarget(p: BaseModule) =
+      p.toRelativeTarget(root).ref(localTarget.ref).copy(component = localTarget.component)
+    _parent match {
+      case Some(parent)     => makeTarget(parent)
+      case None             => localTarget
+    }
+  }
+
   private def assertValidTarget(): Unit = {
     val isVecSubaccess = getOptionRef.map {
       case Index(_, _: ULit) => true // Vec literal indexing
@@ -451,10 +441,6 @@ private[chisel3] class DynamicContext(
   val newAnnotations = ArrayBuffer[ChiselMultiAnnotation]()
   var currentModule: Option[BaseModule] = None
 
-  // Enum annotations are added every time a ChiselEnum is bound
-  // To keep the number down, we keep them unique in the annotations
-  val enumAnnos = mutable.HashSet[ChiselAnnotation]()
-
   /** Contains a mapping from a elaborated module to their aspect
     * Set by [[ModuleAspect]]
     */
@@ -481,6 +467,9 @@ private[chisel3] object Builder extends LazyLogging {
     require(dynamicContextVar.value.isDefined, "must be inside Builder context")
     dynamicContextVar.value.get
   }
+
+  /** Check if we are in a Builder context */
+  def inContext: Boolean = dynamicContextVar.value.isDefined
 
   // Used to suppress warnings when casting from a UInt to an Enum
   var suppressEnumCastWarning: Boolean = false
@@ -513,11 +502,21 @@ private[chisel3] object Builder extends LazyLogging {
 
   def idGen: IdGen = chiselContext.get.idGen
 
-  def globalNamespace: Namespace = dynamicContext.globalNamespace
+  def globalNamespace:           Namespace = dynamicContext.globalNamespace
+  // def globalIdentifierNamespace: Namespace = dynamicContext.globalIdentifierNamespace
+
+  // A mapping from previously named bundles to their hashed structural/FIRRTL types, for
+  // disambiguation purposes when emitting type aliases
+  // Records are used as the key for this map to both represent their alias name and preserve
+  // the chisel Bundle structure when passing everything off to the Converter
+  private[chisel3] val aliasMap: mutable.LinkedHashMap[String, (fir.Type)] =
+    mutable.LinkedHashMap.empty[String, (fir.Type)]
+
   def components:      ArrayBuffer[Component] = dynamicContext.components
+
   def annotations:     ArrayBuffer[ChiselAnnotation] = dynamicContext.annotations
 
-  def enumAnnos: mutable.HashSet[ChiselAnnotation] = dynamicContext.enumAnnos
+  // def contextCache: BuilderContextCache = dynamicContext.contextCache
 
   // TODO : Unify this with annotations in the future - done this way for backward compatability
   def newAnnotations: ArrayBuffer[ChiselMultiAnnotation] = dynamicContext.newAnnotations
@@ -542,8 +541,11 @@ private[chisel3] object Builder extends LazyLogging {
         case Slot(_, field)       => Some(field) // Record
         case OpaqueSlot(_)        => None // OpaqueSlots don't contribute to the name
         case Index(_, ILit(n))    => Some(n.toString) // Vec static indexing
+        case LitIndex(_, n)       => Some(n.toString) // Vec static indexing
         case Index(_, ULit(n, _)) => Some(n.toString) // Vec lit indexing
         case Index(_, _: Node) => None // Vec dynamic indexing
+        case f =>
+          throw new InternalErrorException(s"Match Error: field=$f")
       }
       def map2[A, B](a: Option[A], b: Option[A])(f: (A, A) => B): Option[B] =
         a.flatMap(ax => b.map(f(ax, _)))
@@ -666,9 +668,11 @@ private[chisel3] object Builder extends LazyLogging {
   }
 
   def forcedClock: Clock = currentClock.getOrElse(
+    // TODO add implicit clock change to Builder.exception
     throwException("Error: No implicit clock.")
   )
   def forcedReset: Reset = currentReset.getOrElse(
+    // TODO add implicit clock change to Builder.exception
     throwException("Error: No implicit reset.")
   )
 
@@ -698,28 +702,39 @@ private[chisel3] object Builder extends LazyLogging {
       for ((elt, i) <- iter.zipWithIndex) {
         nameRecursively(s"${prefix}_${i}", elt, namer)
       }
+    case product: Product =>
+      product.productIterator.zip(product.productElementNames).foreach {
+        case (elt, fullName) =>
+          val name = fullName.stripPrefix("_")
+          val prefixedName = if (name.nonEmpty) s"${prefix}_${name}" else prefix
+          nameRecursively(prefixedName, elt, namer)
+      }
     case _ => // Do nothing
   }
 
   def errors: ErrorLog = dynamicContext.errors
   def error(m: => String): Unit = {
     // If --throw-on-first-error is requested, throw an exception instead of aggregating errors
-    if (dynamicContextVar.value.isDefined && !dynamicContextVar.value.get.throwOnFirstError) {
+    if (dynamicContextVar.value.isDefined) {
       errors.error(m)
     } else {
       throwException(m)
     }
   }
-  def warning(m:      => String): Unit = if (dynamicContextVar.value.isDefined) errors.warning(m)
+
   def warningNoLoc(m: => String): Unit = if (dynamicContextVar.value.isDefined) errors.warningNoLoc(m)
-  def deprecated(m:   => String, location: Option[String] = None): Unit =
+  
+  def warning(warning: Warning): Unit =
+    if (dynamicContextVar.value.isDefined) errors.warning("warn") // TODO fix when synced Error.scala
+
+  def deprecated(m: => String, location: Option[String] = None): Unit =
     if (dynamicContextVar.value.isDefined) errors.deprecated(m, location)
 
   /** Record an exception as an error, and throw it.
     *
     * @param m exception message
     */
-  @throws(classOf[ChiselException])
+  @throws(classOf[chisel3.ChiselException])
   def exception(m: => String): Nothing = {
     error(m)
     throwException(m)
@@ -730,8 +745,21 @@ private[chisel3] object Builder extends LazyLogging {
     dynamicContext: DynamicContext,
     forceModName:   Boolean = true
   ): (Circuit, T) = {
+    buildImpl(f, dynamicContext, forceModName)
+  }
+
+  private[chisel3] def buildImpl[T <: BaseModule](
+    f:              => T,
+    dynamicContext: DynamicContext,
+    forceModName:   Boolean = true
+  ): (Circuit, T) = {
     dynamicContextVar.withValue(Some(dynamicContext)) {
-      // in tiny designs/testcases that never access anything in chisel3.internal
+      // in tiny designs/testcases that never access anything in
+      // chisel3.internal Must initialize the singleton or
+      // OutOfMemoryErrors and StackOverflowErrors will instead report
+      // as "java.lang.NoClassDefFoundError: Could not initialize
+      // class scala.util.control.NonFatal$".
+      scala.util.control.NonFatal: Unit
       logger.info("Elaborating design...")
       val mod = f
       if (forceModName) { // This avoids definition name index skipping with D/I
@@ -740,7 +768,15 @@ private[chisel3] object Builder extends LazyLogging {
       errors.checkpoint(logger)
       logger.info("Done elaborating.")
 
-      (Circuit(components.last.name, components.toSeq, annotations.toSeq, null, newAnnotations.toSeq), mod)
+      (
+        Circuit(
+          components.last.name,
+          components.toSeq,
+          annotations.toSeq,
+          null,
+          newAnnotations.toSeq),
+        mod
+      )
     }
   }
   initializeSingletons()

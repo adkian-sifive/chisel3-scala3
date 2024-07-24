@@ -19,7 +19,10 @@ object Cat {
   /** Concatenates the argument data elements, in argument order, together. The first argument
     * forms the most significant bits, while the last argument forms the least significant bits.
     */
-  def apply[T <: Bits](@deprecatedName(Symbol("a"), "Chisel 3.5") a: T, @deprecatedName(Symbol("r"), "Chisel 3.5") r: T*): UInt = apply(
+  def apply[T <: Bits](
+    @deprecatedName(Symbol("a"), "Chisel 3.5") a: T,
+    @deprecatedName(Symbol("r"), "Chisel 3.5") r: T*
+  ): UInt = apply(
     a :: r.toList
   )
 

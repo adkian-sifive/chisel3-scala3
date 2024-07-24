@@ -446,7 +446,7 @@ abstract class Data extends HasId with NamedComponent {
   override def autoSeed(name: String): this.type = {
     topBindingOpt match {
       // Ports are special in that the autoSeed will keep the first name, not the last name
-      case Some(PortBinding(m)) if hasAutoSeed && Builder.currentModule.contains(m) => this
+      case Some(PortBinding(m)) if hasSeed && Builder.currentModule.contains(m) => this
       case _                                                                        => super.autoSeed(name)
     }
   }
@@ -604,12 +604,12 @@ abstract class Data extends HasId with NamedComponent {
   ): Unit = {
     // requireIsHardware(this, s"data to be bulk-connected")
     // requireIsHardware(that, s"data to be bulk-connected")
-      (this.topBinding, that.topBinding) match {
-      case (_: ReadOnlyBinding, _: ReadOnlyBinding) => throwException(s"Both $this and $that are read-only")
-      // DontCare cannot be a sink (LHS)
-      case (_: DontCareBinding, _) => throw BiConnect.DontCareCantBeSink
-      case _ => // fine
-    }
+    (this.topBinding, that.topBinding) match {
+        case (_: ReadOnlyBinding, _: ReadOnlyBinding) => throwException(s"Both $this and $that are read-only")
+        // DontCare cannot be a sink (LHS)
+        case (_: DontCareBinding, _) => throw BiConnect.DontCareCantBeSink
+        case _ => // fine
+      }
     try {
       BiConnect.connect(this, that, Builder.currentModule.get)
     } catch {
@@ -1046,7 +1046,7 @@ object WireDefault {
 /** RHS (source) for Invalidate API.
   * Causes connection logic to emit a DefInvalid when connected to an output port (or wire).
   */
-final case object DontCare extends Element {
+case object DontCare extends Element {
   // This object should be initialized before we execute any user code that refers to it,
   //  otherwise this "Chisel" object will end up on the UserModule's id list.
   // We make it private to chisel3 so it has to be accessed through the package object.

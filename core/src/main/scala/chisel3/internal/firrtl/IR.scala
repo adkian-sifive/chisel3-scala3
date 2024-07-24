@@ -325,6 +325,7 @@ case class DefMemPort[T <: Data](
   clock:      Arg)
     extends Definition
 @nowarn("msg=class Port") // delete when Port becomes private
+case class DefObject(id: HasId, className: String) extends Definition
 case class DefInstance(id: BaseModule, ports: Seq[Port]) extends Definition
 case class WhenBegin(pred: Arg) extends Command
 case class WhenEnd(firrtlDepth: Int, hasAlt: Boolean = false) extends Command
@@ -379,6 +380,7 @@ case class Circuit(
   ) = Circuit(name, components, annotations, renames, newAnnotations)
 
 }
+case class DefClass(id: Class[_], name: String, ports: Seq[Port], commands: Seq[Command]) extends Component
 object Circuit
     extends scala.runtime.AbstractFunction4[String, Seq[Component], Seq[ChiselAnnotation], RenameMap, Circuit] {
   def unapply(c: Circuit): Option[(String, Seq[Component], Seq[ChiselAnnotation], RenameMap)] = {

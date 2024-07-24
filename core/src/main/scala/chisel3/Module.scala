@@ -3,7 +3,7 @@
 package chisel3
 
 import scala.collection.immutable.ListMap
-import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.collection.mutable.{ArrayBuffer, HashMap, LinkedHashSet}
 
 import chisel3.internal._
 import chisel3.internal.Builder._
@@ -22,6 +22,34 @@ object Module {
     * @return the input module `m` with Chisel metadata properly set
     */
   def apply[T <: BaseModule](bc: => T): T = {
+    // Instantiate the module definition.
+    val module = evaluate[T](bc)
+
+    // Handle connections at enclosing scope
+    // We use _component because Modules that don't generate them may still have one
+    if (Builder.currentModule.isDefined && module._component.isDefined) {
+      // Class only uses the Definition API, and is not allowed here.
+      module match {
+        case _: Class[_] => throwException("Module() cannot be called on a Class. Please use Definition().")
+        case _ => ()
+      }
+
+      val component = module._component.get
+      component match {
+        case DefClass(_, name, _, _) =>
+          Builder.referenceUserContainer match {
+            case rm:  RawModule => rm.addCommand(DefObject(module, name))
+          }
+        case _ => pushCommand(DefInstance(module, component.ports))
+      }
+      module.initializeInParent()
+    }
+
+    module
+  }
+
+  /** Build a module definition */
+  private[chisel3] def evaluate[T <: BaseModule](bc: => T): T = {
     if (Builder.readyForModuleConstr) {
       throwException(
         "Error: Called Module() twice without instantiating a Module."

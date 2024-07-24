@@ -623,6 +623,27 @@ private[chisel3] object Builder extends LazyLogging {
       )
   }
 
+  def referenceUserModule: RawModule = {
+    currentModule match {
+      case Some(module: RawModule) => module
+      case _ =>
+        throwException(
+          "Error: Not in a RawModule. Likely cause: Missed Module() wrap, bare chisel API call, or attempting to construct hardware inside a BlackBox."
+          // A bare api call is, e.g. calling Wire() from the scala console).
+        )
+    }
+  }
+  def referenceUserContainer: BaseModule = {
+    currentModule match {
+      case Some(module: RawModule) => module
+      case _ =>
+        throwException(
+          "Error: Not in a RawModule. Likely cause: Missed Module() or Definition() wrap, bare chisel API call, or attempting to construct hardware inside a BlackBox."
+          // A bare api call is, e.g. calling Wire() from the scala console).
+        )
+    }
+  }
+
   def forcedUserModule: RawModule = currentModule match {
     case Some(module: RawModule) => module
     case _ =>

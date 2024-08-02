@@ -9,8 +9,9 @@ import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
 import chisel3.experimental.BaseModule
-import _root_.firrtl.annotations.{IsModule, ModuleName, ModuleTarget}
+import _root_.firrtl.annotations.{IsModule, ModuleName, ModuleTarget, ReferenceTarget}
 import _root_.firrtl.AnnotationSeq
+import chisel3.util.simpleClassName
 
 object Module {
 
@@ -61,6 +62,8 @@ object Module {
     val parentWhenStack = Builder.whenStack
 
     // Save then clear clock and reset to prevent leaking scope, must be set again in the Module
+    // Note that Disable is a function of whatever the current reset is, so it does not need a port
+    //   and thus does not change when we cross module boundaries
     val (saveClock, saveReset) = (Builder.currentClock, Builder.currentReset)
     val savePrefix = Builder.getPrefix
     Builder.clearPrefix()
@@ -83,10 +86,6 @@ object Module {
           "This is probably due to rewrapping a Module instance with Module()."
       )
     }
-    Builder.currentModule = parent // Back to parent!
-    Builder.whenStack = parentWhenStack
-    Builder.currentClock = saveClock // Back to clock and reset scope
-    Builder.currentReset = saveReset
 
     // Only add the component if the module generates one
     val componentOpt = module.generateComponent()
@@ -94,15 +93,15 @@ object Module {
       Builder.components += component
     }
 
+    // Reset Builder state *after* generating the component, so any
+    // atModuleBodyEnd generators are still within the scope of the
+    // current Module.
+    Builder.currentModule = parent // Back to parent!
+    Builder.whenStack = parentWhenStack
+    Builder.currentClock = saveClock // Back to clock and reset scope
+    Builder.currentReset = saveReset
     Builder.setPrefix(savePrefix)
 
-    // Handle connections at enclosing scope
-    // We use _component because Modules that don't generate them may still have one
-    if (Builder.currentModule.isDefined && module._component.isDefined) {
-      val component = module._component.get
-      pushCommand(DefInstance(module, component.ports))
-      module.initializeInParent()
-    }
     module
   }
 
@@ -170,8 +169,10 @@ abstract class Module extends RawModule {
   final val clock: Clock = IO(Input(Clock())).suggestName("clock")
   final val reset: Reset = IO(Input(mkReset)).suggestName("reset")
 
-  // TODO It's hard to remove these deprecated override methods because they're used by
-  //   Chisel.QueueCompatibility which extends chisel3.Queue which extends chisel3.Module
+  override protected def implicitClock: Clock = clock
+  override protected def implicitReset: Reset = reset
+
+  // TODO Delete these
   private var _override_clock: Option[Clock] = None
   private var _override_reset: Option[Bool] = None
   @deprecated("Use withClock at Module instantiation", "Chisel 3.5")
@@ -186,6 +187,7 @@ abstract class Module extends RawModule {
   protected def override_reset_=(rhs: Option[Bool]): Unit = {
     _override_reset = rhs
   }
+  // End TODO Delete
 
   private[chisel3] def mkReset: Reset = {
     // Top module and compatibility mode use Bool for reset
@@ -299,7 +301,7 @@ package experimental {
     //
     protected var _closed = false
 
-    /** Internal check if a Module is closed */
+    /** Internal check if a Module's constructor has finished executing */
     private[chisel3] def isClosed = _closed
 
     // Fresh Namespace because in Firrtl, Modules namespaces are disjoint with the global namespace
@@ -385,21 +387,7 @@ package experimental {
       *
       * @note If you want a custom or parametric name, override this method.
       */
-    def desiredName: String = {
-      /* The default module name is derived from the Java reflection derived class name. */
-      val baseName = this.getClass.getName
-
-      /* A sequence of string filters applied to the name */
-      val filters: Seq[String => String] =
-        Seq(((a: String) => raw"\$$+anon".r.replaceAllIn(a, "_Anon")) // Merge the "$$anon" name with previous name
-        )
-
-      filters
-        .foldLeft(baseName) { case (str, filter) => filter(str) } // 1. Apply filters to baseName
-        .split("\\.|\\$") // 2. Split string at '.' or '$'
-        .filterNot(_.forall(_.isDigit)) // 3. Drop purely numeric names
-        .last // 4. Use the last name
-    }
+    def desiredName: String = simpleClassName(this.getClass)
 
     /** Legalized name of this module. */
     final lazy val name =
@@ -444,25 +432,32 @@ package experimental {
       }
     }
 
-  /** Returns a FIRRTL ReferenceTarget that references this object, relative to an optional root.
-    *
-    * If `root` is defined, the target is a hierarchical path starting from `root`.
-    *
-    * If `root` is not defined, the target is a hierarchical path equivalent to `toAbsoluteTarget`.
-    *
-    * @note If `root` is defined, and has not finished elaboration, this must be called within `atModuleBodyEnd`.
-    * @note The NamedComponent must be a descendant of `root`, if it is defined.
-    * @note This doesn't have special handling for Views.
-    */
-    final def toRelativeTarget(root: Option[BaseModule]): ReferenceTarget = {
-      val localTarget = toTarget
-      def makeTarget(p: BaseModule) =
-        p.toRelativeTarget(root).ref(localTarget.ref).copy(component = localTarget.component)
-      _parent match {
-        // case Some(ViewParent) => makeTarget(reifyParent) TODO add with datamirror
-        case Some(parent)     => makeTarget(parent)
-        case None             => localTarget
-      }
+    /** Returns a FIRRTL ModuleTarget that references this object, relative to an optional root.
+      *
+      * If `root` is defined, the target is a hierarchical path starting from `root`.
+      *
+      * If `root` is not defined, the target is a hierarchical path equivalent to `toAbsoluteTarget`.
+      *
+      * @note If `root` is defined, and has not finished elaboration, this must be called within `atModuleBodyEnd`.
+      * @note The BaseModule must be a descendant of `root`, if it is defined.
+      * @note This doesn't have special handling for Views.
+      */
+    final def toRelativeTarget(root: Option[BaseModule]): IsModule = {
+      // If root was defined, and we are it, return this.
+      if (root.contains(this)) getTarget
+      // Otherwise check if root and _parent are defined.
+      else
+        (root, _parent) match {
+          // If root was defined, and we are not there yet, recurse up.
+          case (_, Some(parent)) => parent.toRelativeTarget(root).instOf(this.instanceName, name)
+          // If root was defined, and there is no parent, the root was not an ancestor.
+          case (Some(definedRoot), None) =>
+            throwException(
+              s"Requested .toRelativeTarget relative to ${definedRoot.name}, but it is not an ancestor of $this"
+            )
+          // If root was not defined, and there is no parent, return this.
+          case (None, None) => getTarget
+        }
     }
 
     /**

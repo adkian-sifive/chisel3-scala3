@@ -113,7 +113,7 @@ abstract class RawModule extends BaseModule {
   //
   // Other Internal Functions
   //
-  private var _firrtlPorts: Option[Seq[firrtl.Port]] = None
+  private var _firrtlPorts: Option[Seq[Port]] = None
 
   @deprecated("Use DataMirror.modulePorts instead. this API will be removed in Chisel 3.6", "Chisel 3.5")
   lazy val getPorts: Seq[Port] = _firrtlPorts.get
@@ -167,7 +167,6 @@ abstract class RawModule extends BaseModule {
     // All suggestions are in, force names to every node.
     for (id <- getIds) {
       id match {
-        case id: ModuleClone[_]   => id.setRefAndPortsRef(_namespace) // special handling
         case id: BaseModule       => id.forceName(default = id.desiredName, _namespace)
         case id: MemBase[_]       => id.forceName(default = "MEM", _namespace)
         // removed till macros are fixed
@@ -192,10 +191,7 @@ abstract class RawModule extends BaseModule {
             }
           } // else, don't name unbound types
       }
-      id._onModuleClose
     }
-
-    closeUnboundIds(names)
 
     val firrtlPorts = getModulePorts.map { port =>
       // Special case Vec to make FIRRTL emit the direction of its

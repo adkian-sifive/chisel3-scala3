@@ -3,8 +3,10 @@
 package chisel3.internal
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{ArrayBuffer, LinkedHashMap}
-import scala.util.control.NoStackTrace
+import scala.collection.mutable.{ArrayBuffer, LinkedHashMap, LinkedHashSet}
+import scala.util.Try
+import scala.util.control.{NoStackTrace, NonFatal}
+import scala.util.matching.Regex
 import _root_.logger.Logger
 
 object ExceptionHelpers {
@@ -191,7 +193,7 @@ private[chisel3] class ErrorLog(warningsAsErrors: Boolean) {
   }
 
   private def warn(m: => String, loc: Option[StackTraceElement]): LogEntry =
-    if (warningsAsErrors) new Error(m, loc) else new Warning(m, loc)
+    if (warningsAsErrors) new Error(m, loc) else new Info(m, None)
 
   /** Log a warning message */
   def warning(m: => String): Unit = {

@@ -6,8 +6,8 @@
 package chisel3.util
 
 import chisel3._
-
-import scala.annotation.nowarn
+import chisel3.experimental.prefix
+import chisel3.util.simpleClassName
 
 /** A [[Bundle]] that adds a `valid` bit to some data. This indicates that the user expects a "valid" interface between
   * a producer and a consumer. Here, the producer asserts the `valid` bit when data on the `bits` line contains valid
@@ -38,11 +38,23 @@ class Valid[+T <: Data](gen: T) extends Bundle {
     */
   def fire: Bool = valid
 
-  @deprecated(
-    "Calling this function with an empty argument list is invalid in Scala 3. Use the form without parentheses instead",
-    "Chisel 3.5"
-  )
-  def fire(dummy: Int = 0): Bool = valid
+  /** A non-ambiguous name of this `Valid` instance for use in generated Verilog names
+    * Inserts the parameterized generator's typeName, e.g. Valid_UInt4
+    */
+  // todo scala3 fix
+  // override def typeName = s"${simpleClassName(this.getClass)}_${gen.typeName}"
+
+  /** Applies the supplied functor to the bits of this interface, returning a new typed Valid interface.
+    * @param f The function to apply to this Valid's 'bits' with return type B
+    * @return a new Valid of type B
+    */
+  def map[B <: Data](f: T => B): Valid[B] = {
+    val _map_bits = f(bits)
+    val _map = Wire(Valid(chiselTypeOf(_map_bits)))
+    _map.bits := _map_bits
+    _map.valid := valid
+    _map.readOnly
+  }
 }
 
 /** Factory for generating "valid" interfaces. A "valid" interface is a data-communicating interface between a producer
@@ -56,8 +68,7 @@ class Valid[+T <: Data](gen: T) extends Bundle {
   *   }
   * }}}
   *
-  * To convert this to a "valid" interface, you wrap it with a call to the [[Valid$.apply `Valid` companion object's
-  * apply method]]:
+  * To convert this to a `valid` interface, you wrap it with a call to the `Valid` companion object's apply method:
   * {{{
   *   val bar = Valid(new MyBundle)
   * }}}
@@ -70,7 +81,8 @@ class Valid[+T <: Data](gen: T) extends Bundle {
   *   }
   * }}}
   *
-  * In addition to adding the `valid` bit, a [[Valid.fire]] method is also added that returns the `valid` bit. This
+  * In addition to adding the `valid` bit, a `Valid.fire` method is also added that returns the `valid` bit. This
+  *
   * provides a similarly named interface to [[DecoupledIO]]'s fire.
   *
   * @see [[Decoupled$ DecoupledIO Factory]]
@@ -118,7 +130,6 @@ object Pipe {
     * @param latency the number of pipeline stages
     * @return $returnType
     */
-  @nowarn("cat=deprecation&msg=TransitName")
   def apply[T <: Data](enqValid: Bool, enqBits: T, latency: Int): Valid[T] = {
     require(latency >= 0, "Pipe latency must be greater than or equal to zero!")
     if (latency == 0) {
@@ -126,14 +137,12 @@ object Pipe {
       out.valid := enqValid
       out.bits := enqBits
       out
-    } else {
-      val v = RegNext(enqValid, false.B)
-      val b = RegEnable(enqBits, enqValid)
-      val out = apply(v, b, latency - 1)
-
-      TransitName.withSuffix("Pipe_valid")(out, v)
-      TransitName.withSuffix("Pipe_bits")(out, b)
-    }
+    } else
+      prefix("pipe") {
+        val v = RegNext(enqValid, false.B)
+        val b = RegEnable(enqBits, enqValid)
+        apply(v, b, latency - 1)
+      }
   }
 
   /** Generate a one-stage pipe from an explicit valid bit and some data
@@ -182,6 +191,13 @@ object Pipe {
   * @see The [[ShiftRegister$ ShiftRegister factory]] to generate a pipe without a [[Valid]] interface
   */
 class Pipe[T <: Data](val gen: T, val latency: Int = 1) extends Module {
+
+  /** A non-ambiguous name of this `Pipe` for use in generated Verilog names.
+    * Includes the latency cycle count in the name as well as the parameterized
+    * generator's `typeName`, e.g. `Pipe4_UInt4`
+    */
+  // todo scala3 fix
+  // override def desiredName = s"${simpleClassName(this.getClass)}${latency}_${gen.typeName}"
 
   /** Interface for [[Pipe]]s composed of a [[Valid]] input and [[Valid]] output
     * @define notAQueue

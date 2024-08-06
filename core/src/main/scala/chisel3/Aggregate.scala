@@ -966,7 +966,7 @@ abstract class Record extends Aggregate {
     case _ => false
   }
 
-  private[chisel3] override def _onModuleClose: Unit = {
+  private[chisel3] def _onModuleClose: Unit = {
     // This is usually done during binding, but these must still be set for unbound Records
     if (this.binding.isEmpty) {
       setElementRefs()

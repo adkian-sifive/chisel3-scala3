@@ -342,7 +342,7 @@ case class Circuit(
   ) = Circuit(name, components, annotations, renames, newAnnotations)
 
 }
-case class DefClass(id: Class[_], name: String, ports: Seq[Port], commands: Seq[Command]) extends Component
+// case class DefClass(id: Class[?], name: String, ports: Seq[Port], commands: Seq[Command]) extends Component
 object Circuit
     extends scala.runtime.AbstractFunction4[String, Seq[Component], Seq[ChiselAnnotation], RenameMap, Circuit] {
   def unapply(c: Circuit): Option[(String, Seq[Component], Seq[ChiselAnnotation], RenameMap)] = {

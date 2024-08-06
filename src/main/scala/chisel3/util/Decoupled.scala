@@ -7,8 +7,7 @@ package chisel3.util
 
 import chisel3._
 import chisel3.experimental.{requireIsChiselType, DataMirror, Direction}
-
-import scala.annotation.nowarn
+import chisel3.util.simpleClassName
 
 /** An I/O Bundle containing 'valid' and 'ready' signals that handshake
   * the transfer of data stored in the 'bits' subfield.
@@ -20,10 +19,6 @@ import scala.annotation.nowarn
   * @groupdesc Signals The actual hardware fields of the Bundle
   */
 abstract class ReadyValidIO[+T <: Data](gen: T) extends Bundle {
-  // Compatibility hack for rocket-chip
-  private val genType = (DataMirror.internal.isSynthesizable(gen), chisel3.internal.Builder.currentModule) match {
-    case _ => gen
-  }
 
   /** Indicates that the consumer is ready to accept the data this cycle
     * @group Signals
@@ -38,7 +33,13 @@ abstract class ReadyValidIO[+T <: Data](gen: T) extends Bundle {
   /** The data to be transferred when ready and valid are asserted at the same cycle
     * @group Signals
     */
-  val bits = Output(genType)
+  val bits = Output(gen)
+
+  /** A stable typeName for this `ReadyValidIO` and any of its implementations
+    * using the supplied `Data` generator's `typeName`
+    */
+  // todo scala3 fix
+  // override def typeName = s"${simpleClassName(this.getClass)}_${gen.typeName}"
 }
 
 object ReadyValidIO {
@@ -48,12 +49,6 @@ object ReadyValidIO {
     /** Indicates if IO is both ready and valid
       */
     def fire: Bool = target.ready && target.valid
-
-    @deprecated(
-      "Calling this function with an empty argument list is invalid in Scala 3. Use the form without parentheses instead",
-      "Chisel 3.5"
-    )
-    def fire(dummy: Int = 0): Bool = fire
 
     /** Push dat onto the output bits of this interface to let the consumer know it has happened.
       * @param dat the values to assign to bits.
@@ -208,12 +203,12 @@ class QueueIO[T <: Data](
    *  but internally, the queue implementation itself sits on the other side
    *  of the interface so uses the flipped instance.
    */
-  /** I/O to enqueue data (client is producer, and Queue object is consumer), is [[Chisel.DecoupledIO]] flipped.
+  /** I/O to enqueue data (client is producer, and Queue object is consumer), is [[chisel3.util.DecoupledIO]] flipped.
     * @group Signals
     */
   val enq = Flipped(EnqIO(gen))
 
-  /** I/O to dequeue data (client is consumer and Queue object is producer), is [[Chisel.DecoupledIO]]
+  /** I/O to dequeue data (client is consumer and Queue object is producer), is [[chisel3.util.DecoupledIO]]
     * @group Signals
     */
   val deq = Flipped(DeqIO(gen))
@@ -251,17 +246,14 @@ class Queue[T <: Data](
   val pipe:           Boolean = false,
   val flow:           Boolean = false,
   val useSyncReadMem: Boolean = false,
-  val hasFlush:       Boolean = false
-) extends Module() {
+  val hasFlush:       Boolean = false)
+    extends Module() {
   require(entries > -1, "Queue must have non-negative number of entries")
   require(entries != 0, "Use companion object Queue.apply for zero entries")
-  val genType = {
-    requireIsChiselType(gen)
-    gen
-  }
+  requireIsChiselType(gen)
 
-  val io = IO(new QueueIO(genType, entries, hasFlush))
-  val ram = if (useSyncReadMem) SyncReadMem(entries, genType, SyncReadMem.WriteFirst) else Mem(entries, genType)
+  val io = IO(new QueueIO(gen, entries, hasFlush))
+  val ram = if (useSyncReadMem) SyncReadMem(entries, gen, SyncReadMem.WriteFirst) else Mem(entries, gen)
   val enq_ptr = Counter(entries)
   val deq_ptr = Counter(entries)
   val maybe_full = RegInit(false.B)
@@ -325,6 +317,12 @@ class Queue[T <: Data](
       Mux(deq_ptr.value > enq_ptr.value, entries.asUInt + ptr_diff, ptr_diff)
     )
   }
+
+  /** Give this Queue a default, stable desired name using the supplied `Data`
+    * generator's `typeName`
+    */
+  // todo scala3 fix
+  // override def desiredName = s"Queue${entries}_${gen.typeName}"
 }
 
 /** Factory for a generic hardware queue. */
@@ -347,7 +345,6 @@ object Queue {
     *   consumer.io.in <> Queue(producer.io.out, 16)
     * }}}
     */
-  @nowarn("cat=deprecation&msg=TransitName")
   def apply[T <: Data](
     enq:            ReadyValidIO[T],
     entries:        Int = 2,
@@ -368,7 +365,7 @@ object Queue {
       q.io.enq.valid := enq.valid // not using <> so that override is allowed
       q.io.enq.bits := enq.bits
       enq.ready := q.io.enq.ready
-      TransitName(q.io.deq, q)
+      q.io.deq
     }
   }
 

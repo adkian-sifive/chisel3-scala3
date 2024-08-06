@@ -824,6 +824,25 @@ abstract class Data extends HasId with NamedComponent {
 
   /** Default pretty printing */
   def toPrintable: Printable
+
+  implicit class AsReadOnly[T <: Data](self: T) {
+
+    /** Returns a read-only view of this Data
+      *
+      * It is illegal to connect to the return value of this method.
+      * This Data this method is called on must be a hardware type.
+      */
+    def readOnly: T = {
+      val alreadyReadOnly = self.isLit || self.topBindingOpt.exists(_.isInstanceOf[ReadOnlyBinding])
+      if (alreadyReadOnly) {
+        self
+      } else {
+        self
+        // todo fix when adding dataview
+        // self.viewAsReadOnly(_ => "Cannot connect to read-only value")
+      }
+    }
+  }
 }
 
 object Data {

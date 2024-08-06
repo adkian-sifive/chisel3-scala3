@@ -69,7 +69,7 @@ package object internal {
   private[chisel3] def _padHandleBool[A <: Bits](
     x:     A,
     width: Int
-  )(using Quotes): A = x match {
+  )(using Quotes, quoted.Type[A]): A = x match {
     case b: Bool if !b.isLit && width > 1 && Type.of[A] == Type.of[UInt] =>
       val _pad = Wire(UInt(width.W))
       _pad := b

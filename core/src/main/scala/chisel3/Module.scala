@@ -31,16 +31,16 @@ object Module {
     if (Builder.currentModule.isDefined && module._component.isDefined) {
       // Class only uses the Definition API, and is not allowed here.
       module match {
-        case _: Class[_] => throwException("Module() cannot be called on a Class. Please use Definition().")
+        // case _: Class[_] => throwException("Module() cannot be called on a Class. Please use Definition().")
         case _ => ()
       }
 
       val component = module._component.get
       component match {
-        case DefClass(_, name, _, _) =>
-          Builder.referenceUserContainer match {
-            case rm:  RawModule => rm.addCommand(DefObject(module, name))
-          }
+        // case DefClass(_, name, _, _) =>
+        //   Builder.referenceUserContainer match {
+        //     case rm:  RawModule => rm.addCommand(DefObject(module, name))
+        //   }
         case _ => pushCommand(DefInstance(module, component.ports))
       }
       module.initializeInParent()
@@ -169,8 +169,8 @@ abstract class Module extends RawModule {
   final val clock: Clock = IO(Input(Clock())).suggestName("clock")
   final val reset: Reset = IO(Input(mkReset)).suggestName("reset")
 
-  override protected def implicitClock: Clock = clock
-  override protected def implicitReset: Reset = reset
+  protected def implicitClock: Clock = clock
+  protected def implicitReset: Reset = reset
 
   // TODO Delete these
   private var _override_clock: Option[Clock] = None

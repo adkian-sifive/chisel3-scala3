@@ -10,6 +10,7 @@ import scala.collection.immutable.VectorMap
 
 /** Requires that a node is hardware ("bound")
   */
+// remove/move this to chisel3.experimental once references are fixed
 object requireIsHardware {
   def apply(node: Data, msg: String = ""): Unit = {
     node._parent match { // Compatibility layer hack

@@ -23,6 +23,19 @@ package object experimental {
   type Direction = ActualDirection
   val Direction = ActualDirection
 
+  /** Requires that a node is hardware ("bound")
+    */
+  object requireIsHardware {
+    def apply(node: Data, msg: String = ""): Unit = {
+      if (!node.isSynthesizable) {
+        val prefix = if (msg.nonEmpty) s"$msg " else ""
+        throw ExpectedHardwareException(
+          s"$prefix'$node' must be hardware, " +
+            "not a bare Chisel type. Perhaps you forgot to wrap it in Wire(_) or IO(_)?"
+        )
+      }
+    }
+  }
 
   // class dump extends chisel3.internal.naming.dump
   // class treedump extends chisel3.internal.naming.treedump

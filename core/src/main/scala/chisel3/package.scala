@@ -6,6 +6,7 @@ import java.util.{MissingFormatArgumentException, UnknownFormatConversionExcepti
 import chisel3.experimental.VecLiterals._
 import chisel3.experimental.BundleLiterals._
 
+import _root_.firrtl.annotations.{IsMember, Named, ReferenceTarget}
 import scala.collection.mutable
 import scala.annotation.tailrec
 
@@ -13,7 +14,7 @@ import scala.annotation.tailrec
 /** This package contains the main chisel3 API.
   */
 package object chisel3 {
-  import internal.firrtl.{Port, Width}
+  import internal.firrtl.Port
   import internal.Builder
 
   import scala.language.implicitConversions
@@ -191,6 +192,15 @@ package object chisel3 {
     def pathName:       String
     def parentPathName: String
     def parentModName:  String
+
+    /** Returns a FIRRTL Named that refers to this object in the elaborated hardware graph */
+    def toNamed: Named
+
+    /** Returns a FIRRTL IsMember that refers to this object in the elaborated hardware graph */
+    def toTarget: IsMember
+
+    /** Returns a FIRRTL IsMember that refers to the absolute path to this object in the elaborated hardware graph */
+    def toAbsoluteTarget: IsMember
   }
 
   @deprecated("MultiIOModule is now just Module", "Chisel 3.5")

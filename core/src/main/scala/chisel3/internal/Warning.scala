@@ -27,10 +27,9 @@ private[chisel3] case class Warning(id: WarningID, msg: String)
 private[chisel3] object Warning {
   def apply(id: WarningID, msg: String): Warning = {
     val num = f"[W${id.id}%03d] "
-    new Warning(info, id, num + msg)
+    new Warning(id, num + msg)
   }
   def noInfo(id: WarningID, msg: String): Warning = {
-    implicit val info = SourceInfo.materializeFromStacktrace
     Warning(id, msg)
   }
 }

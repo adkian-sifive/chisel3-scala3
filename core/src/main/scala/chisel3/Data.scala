@@ -143,7 +143,7 @@ package experimental {
     def widthOf(target:              Data): Width = target.width
     def specifiedDirectionOf(target: Data): SpecifiedDirection = target.specifiedDirection
     def directionOf(target: Data): ActualDirection = {
-      requireIsHardware(target, "node requested directionality on")
+      chisel3.experimental.requireIsHardware(target, "node requested directionality on")
       target.direction
     }
 

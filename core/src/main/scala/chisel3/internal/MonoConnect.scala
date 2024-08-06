@@ -3,7 +3,7 @@
 package chisel3.internal
 
 import chisel3._
-import chisel3.experimental.{Analog, BaseModule, UnsafeEnum}
+import chisel3.experimental.{Analog, BaseModule}
 import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl.{Connect, Converter, DefInvalid}
 

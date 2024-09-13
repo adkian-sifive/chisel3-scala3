@@ -6,11 +6,12 @@ import scala.util.DynamicVariable
 import scala.collection.mutable.ArrayBuffer
 import chisel3._
 import chisel3.experimental._
+import chisel3.experimental.hierarchy.core.{Clone, Definition, Hierarchy, ImportDefinitionAnnotation, Instance}
 import chisel3.internal.firrtl._
 import chisel3.internal.naming._
 import _root_.firrtl.annotations.{CircuitName, ComponentName, IsMember, ModuleName, Named, ReferenceTarget}
 import _root_.firrtl.annotations.AnnotationUtils.validComponentName
-import _root_.firrtl.{AnnotationSeq, RenameMap}
+import _root_.firrtl.{AnnotationSeq, RenameMap, annoSeqToSeq}
 import _root_.firrtl.{ir => fir}
 import chisel3.internal.Builder.Prefix
 import logger.LazyLogging
@@ -432,9 +433,42 @@ private[chisel3] class DynamicContext(
   val annotationSeq:        AnnotationSeq,
   val throwOnFirstError:    Boolean,
   val warnReflectiveNaming: Boolean,
-  val warningsAsErrors:     Boolean) {
+  val warningsAsErrors:     Boolean,
+  val defaultNamespace:  Option[Namespace],
+  val definitions:   ArrayBuffer[Definition[?]]) {
 
-  val globalNamespace = Namespace.empty
+  val importedDefinitionAnnos = annotationSeq.collect { case a: ImportDefinitionAnnotation[_] => a }
+
+  // Map from proto module name to ext-module name
+  // Pick the definition name by default in case not overridden
+  // 1. Ensure there are no repeated names for imported Definitions - both Proto Names as well as ExtMod Names
+  // 2. Return the distinct definition / extMod names
+  val importedDefinitionMap = importedDefinitionAnnos
+    .map(a => a.definition.proto.name -> a.overrideDefName.getOrElse(a.definition.proto.name))
+    .toMap
+
+  private def checkAndGetDistinctProtoExtModNames() = {
+    val allProtoNames = importedDefinitionAnnos.map { a => a.definition.proto.name }
+    val distinctProtoNames = importedDefinitionMap.keys.toSeq
+    val allExtModNames = importedDefinitionMap.toSeq.map(_._2)
+    val distinctExtModNames = allExtModNames.distinct
+
+    if (distinctProtoNames.length < allProtoNames.length) {
+      val duplicates = allProtoNames.diff(distinctProtoNames).mkString(", ")
+      throwException(s"Expected distinct imported Definition names but found duplicates for: $duplicates")
+    }
+    if (distinctExtModNames.length < allExtModNames.length) {
+      val duplicates = allExtModNames.diff(distinctExtModNames).mkString(", ")
+      throwException(s"Expected distinct overrideDef names but found duplicates for: $duplicates")
+    }
+    (
+      (allProtoNames ++ allExtModNames).distinct,
+      importedDefinitionAnnos.map(a => a.definition.proto.definitionIdentifier)
+    )
+  }
+
+  val globalNamespace = defaultNamespace.getOrElse(Namespace.empty)
+  val globalIdentifierNamespace = Namespace.empty('$')
 
   val components = ArrayBuffer[Component]()
   val annotations = ArrayBuffer[ChiselAnnotation]()
@@ -454,6 +488,9 @@ private[chisel3] class DynamicContext(
   var currentReset:         Option[Reset] = None
   val errors = new ErrorLog(warningsAsErrors)
   val namingStack = new NamingStack
+
+  // Used to indicate if this is the top-level module of full elaboration, or from a Definition
+  var inDefinition: Boolean = false  
 }
 
 private[chisel3] object Builder extends LazyLogging {
@@ -503,7 +540,7 @@ private[chisel3] object Builder extends LazyLogging {
   def idGen: IdGen = chiselContext.get.idGen
 
   def globalNamespace:           Namespace = dynamicContext.globalNamespace
-  // def globalIdentifierNamespace: Namespace = dynamicContext.globalIdentifierNamespace
+  def globalIdentifierNamespace: Namespace = dynamicContext.globalIdentifierNamespace
 
   // A mapping from previously named bundles to their hashed structural/FIRRTL types, for
   // disambiguation purposes when emitting type aliases
@@ -513,6 +550,7 @@ private[chisel3] object Builder extends LazyLogging {
     mutable.LinkedHashMap.empty[String, (fir.Type)]
 
   def components:      ArrayBuffer[Component] = dynamicContext.components
+  def definitions: ArrayBuffer[Definition[?]] = dynamicContext.definitions
 
   def annotations:     ArrayBuffer[ChiselAnnotation] = dynamicContext.annotations
 
@@ -523,6 +561,7 @@ private[chisel3] object Builder extends LazyLogging {
 
   def annotationSeq:       AnnotationSeq = dynamicContext.annotationSeq
   def namingStack:         NamingStack = dynamicContext.namingStack
+  def importedDefinitionMap: Map[String, String] = dynamicContext.importedDefinitionMap
 
   // Puts a prefix string onto the prefix stack
   def pushPrefix(d: String): Unit = {
@@ -686,6 +725,12 @@ private[chisel3] object Builder extends LazyLogging {
   def currentReset: Option[Reset] = dynamicContext.currentReset
   def currentReset_=(newReset: Option[Reset]): Unit = {
     dynamicContext.currentReset = newReset
+  }
+
+  def inDefinition: Boolean = {
+    dynamicContextVar.value
+      .map(_.inDefinition)
+      .getOrElse(false)
   }
 
   def forcedClock: Clock = currentClock.getOrElse(

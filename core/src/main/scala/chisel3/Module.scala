@@ -9,9 +9,10 @@ import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
 import chisel3.experimental.BaseModule
-import _root_.firrtl.annotations.{IsModule, ModuleName, ModuleTarget, ReferenceTarget}
+import _root_.firrtl.annotations.{InstanceTarget, IsModule, ModuleName, ModuleTarget}
 import _root_.firrtl.AnnotationSeq
 import chisel3.util.simpleClassName
+import chisel3.experimental.hierarchy.Hierarchy
 
 object Module {
 
@@ -219,52 +220,73 @@ package experimental {
 }
 
 package internal {
-  import chisel3.experimental.BaseModule
 
   object BaseModule {
-    private[chisel3] class ModuleClone[T <: BaseModule](val getProto: T) extends PseudoModule {
-      override def toString = s"ModuleClone(${getProto})"
-      // Do not call default addId function, which may modify a module that is already "closed"
-      def getPorts = _portsRecord
-      // ClonePorts that hold the bound ports for this module
-      // Used for setting the refs of both this module and the Record
-      private[BaseModule] var _portsRecord: Record = scala.compiletime.uninitialized
-      // Don't generate a component, but point to the one for the cloned Module
-      private[chisel3] def generateComponent(): Option[Component] = {
-        require(!_closed, "Can't generate module more than once")
-        _closed = true
-        _component = getProto._component
-        None
-      }
-      // Maps proto ports to module clone's ports
-      private[chisel3] lazy val ioMap: Map[Data, Data] = {
-        val name2Port = getPorts.elements
-        getProto.getChiselPorts.map {
-          case (name, data) => data -> name2Port(name)
-        }.toMap
-      }
 
-      private[chisel3] def setRefAndPortsRef(namespace: Namespace): Unit = {
-        val record = _portsRecord
-        // Use .forceName to re-use default name resolving behavior
-        record.forceName(default = this.desiredName, namespace)
-        // Now take the Ref that forceName set and convert it to the correct Arg
-        val instName = record.getRef match {
-          case Ref(name) => name
-          case bad       => throwException(s"Internal Error! Cloned-module Record $record has unexpected ref $bad")
-        }
-        // Set both the record and the module to have the same instance name
-        val ref = ModuleCloneIO(getProto, instName)
-        record.setRef(ref, force = true) // force because we did .forceName first
-        this.setRef(Ref(instName))
-      }
+    import chisel3.experimental.hierarchy._
 
-      private[chisel3] override def initializeInParent(): Unit = ()
+    /** Record type returned by CloneModuleAsRecord
+      *
+      * @note These are not true Data (the Record doesn't correspond to anything in the emitted
+      * FIRRTL yet its elements *do*) so have some very specialized behavior.
+      */
+    private[chisel3] class ClonePorts(elts: (String, Data)*) extends Record {
+      val elements = ListMap(elts.map { case (name, d) => name -> d.cloneTypeFull }*)
+      def apply(field: String) = elements(field)
+      override def cloneType = (new ClonePorts(elts*)).asInstanceOf[this.type]
+    }
+
+    private[chisel3] def cloneIORecord(
+      proto: BaseModule
+    ): ClonePorts = {
+      require(proto.isClosed, "Can't clone a module before module close")
+      // Fake Module to serve as the _parent of the cloned ports
+      // We make this before clonePorts because we want it to come up first in naming in
+      // currentModule
+      val cloneParent = Module(new ModuleClone(proto))
+      require(proto.isClosed, "Can't clone a module before module close")
+      require(cloneParent.getOptionRef.isEmpty, "Can't have ref set already!")
+      // Chisel ports can be Data or Property, but to clone as a Record, we can only return Data.
+      val dataPorts = proto.getChiselPorts.collect { case (name, data: Data) => (name, data) }
+      // Fake Module to serve as the _parent of the cloned ports
+      // We don't create this inside the ModuleClone because we need the ref to be set by the
+      // currentModule (and not clonePorts)
+      val clonePorts = new ClonePorts(dataPorts*)
+
+      // getChiselPorts (nor cloneTypeFull in general)
+      // does not recursively copy the right specifiedDirection,
+      // still need to fix it up here.
+      Module.assignCompatDir(clonePorts)
+      clonePorts.bind(PortBinding(cloneParent))
+      clonePorts.setAllParents(Some(cloneParent))
+      cloneParent._portsRecord = clonePorts
+      if (proto.isInstanceOf[Module]) {
+        clonePorts("clock") := Module.clock
+        clonePorts("reset") := Module.reset
+      }
+      clonePorts
     }
   }
 }
 
 package experimental {
+
+  import chisel3.experimental.hierarchy.core.{IsInstantiable, Proto}
+
+  object BaseModule {
+    implicit class BaseModuleExtensions[T <: BaseModule](b: T){
+      import chisel3.experimental.hierarchy.core.{Definition, Instance}
+      def toInstance: Instance[T] = new Instance(Proto(b))
+      def toDefinition: Definition[T] = {
+        val result = new Definition(Proto(b))
+        // .toDefinition is sometimes called in Select APIs outside of Chisel elaboration
+        if (Builder.inContext) {
+          Builder.definitions += result
+        }
+        result
+      }
+    }
+  }
 
   /** Abstract base class for Modules, an instantiable organizational unit for RTL.
     */
@@ -278,6 +300,32 @@ package experimental {
     private[chisel3] def _circuit_=(target: Option[BaseModule]): Unit = {
       _circuitVar = target.getOrElse(null)
     }
+
+    // Used with chisel3.naming.fixTraitIdentifier
+    protected def _traitModuleDefinitionIdentifierProposal: Option[String] = None
+
+    protected def _moduleDefinitionIdentifierProposal = {
+      val baseName = _traitModuleDefinitionIdentifierProposal.getOrElse(this.getClass.getName)
+
+      /* A sequence of string filters applied to the name */
+      val filters: Seq[String => String] =
+        Seq(((a: String) => raw"\$$+anon".r.replaceAllIn(a, "_Anon")) // Merge the "$$anon" name with previous name
+        )
+
+      filters
+        .foldLeft(baseName) { case (str, filter) => filter(str) } // 1. Apply filters to baseName
+        .split("\\.|\\$") // 2. Split string at '.' or '$'
+        .filterNot(_.forall(_.isDigit)) // 3. Drop purely numeric names
+        .last // 4. Use the last name
+    }
+    // Needed this to override identifier for DefinitionClone
+    private[chisel3] def _definitionIdentifier = {
+      val madeProposal = this._moduleDefinitionIdentifierProposal // todo fix after naming
+      Builder.globalIdentifierNamespace.name(madeProposal)
+    }
+
+    /** Represents an eagerly-determined unique and descriptive identifier for this module */
+    final val definitionIdentifier = _definitionIdentifier
 
     //
     // Builder Internals - this tracks which Module RTL construction belongs to.
@@ -458,6 +506,47 @@ package experimental {
           // If root was not defined, and there is no parent, return this.
           case (None, None) => getTarget
         }
+    }
+    /** Returns a FIRRTL ModuleTarget that references this object, relative to an optional root.
+      *
+      * If `root` is defined, the target is a hierarchical path starting from `root`.
+      *
+      * If `root` is not defined, the target is a hierarchical path equivalent to `toAbsoluteTarget`.
+      *
+      * @note If `root` is defined, and has not finished elaboration, this must be called within `atModuleBodyEnd`.
+      * @note The BaseModule must be a descendant of `root`, if it is defined.
+      * @note This doesn't have special handling for Views.
+      */
+    final def toRelativeTargetToHierarchy(root: Option[Hierarchy[BaseModule]]): IsModule = {
+      def fail() = throwException(
+        s"No common ancestor between\n  ${this.toAbsoluteTarget} and\n  ${root.get.toAbsoluteTarget}"
+      )
+
+      // Algorithm starts from the top of both absolute paths
+      // and walks down them checking for equality,
+      // and terminates once the root is just a ModuleTarget
+      def recurse(thisRelative: IsModule, rootRelative: IsModule): IsModule = {
+        (thisRelative, rootRelative) match {
+          case (t: IsModule, r: ModuleTarget) => {
+            if (t.module == r.module) t else fail()
+          }
+          case (t: ModuleTarget, r: InstanceTarget) => fail()
+          case (t: InstanceTarget, r: InstanceTarget) => {
+            if ((t.module == r.module) && (r.asPath.head == t.asPath.head))
+              recurse(t.stripHierarchy(1), r.stripHierarchy(1))
+            else fail()
+          }
+        }
+      }
+
+      if (root.isEmpty) (this.toAbsoluteTarget)
+      else if (this == ViewParent) ViewParent.absoluteTarget
+      else {
+        val thisAbsolute = this.toAbsoluteTarget
+        val rootAbsolute = root.get.toAbsoluteTarget
+        if (thisAbsolute.circuit != thisAbsolute.circuit) fail()
+        recurse(thisAbsolute, rootAbsolute)
+      }
     }
 
     /**

@@ -15,6 +15,9 @@ import scala.quoted
 import scala.quoted._
 
 package object internal {
+  
+  @implicitNotFound("You are trying to access a macro-only API. Please use the @public annotation instead.")
+  trait MacroGenerated
 
   /** Marker trait for modules that are not true modules */
   private[chisel3] trait PseudoModule extends BaseModule

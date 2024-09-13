@@ -15,6 +15,29 @@ package object experimental {
 
   // Rocket Chip-style clonemodule
 
+  /** A record containing the results of CloneModuleAsRecord
+    * The apply method is retrieves the element with the supplied name.
+    */
+  type ClonePorts = BaseModule.ClonePorts
+
+  object CloneModuleAsRecord {
+
+    /** Clones an existing module and returns a record of all its top-level ports.
+      * Each element of the record is named with a string matching the
+      * corresponding port's name and shares the port's type.
+      * @example {{{
+      * val q1 = Module(new Queue(UInt(32.W), 2))
+      * val q2_io = CloneModuleAsRecord(q1)("io").asInstanceOf[q1.io.type]
+      * q2_io.enq <> q1.io.deq
+      * }}}
+      */
+    def apply(
+      proto: BaseModule
+    ): ClonePorts = {
+      BaseModule.cloneIORecord(proto)
+    }
+  }
+
   val requireIsHardware = chisel3.internal.requireIsHardware
   val requireIsChiselType = chisel3.internal.requireIsChiselType
   type Direction = ActualDirection

@@ -3,6 +3,7 @@
 package chisel3.stage.phases
 
 import chisel3.Module
+import chisel3.experimental.hierarchy.core.Definition
 import chisel3.internal.ExceptionHelpers.ThrowableHelpers
 import chisel3.internal.{Builder, DynamicContext}
 import chisel3.stage.{
@@ -17,6 +18,8 @@ import firrtl.{annoSeqToSeq, seqToAnnoSeq}
 import firrtl.AnnotationSeq
 import firrtl.options.Phase
 import firrtl.options.Viewer.view
+
+import scala.collection.mutable.ArrayBuffer
 
 /** Elaborate all [[chisel3.stage.ChiselGeneratorAnnotation]]s into [[chisel3.stage.ChiselCircuitAnnotation]]s.
   */
@@ -36,7 +39,9 @@ class Elaborate extends Phase {
             annotations,
             chiselOptions.throwOnFirstError,
             chiselOptions.warnReflectiveNaming,
-            chiselOptions.warningsAsErrors
+            chiselOptions.warningsAsErrors,
+            None,
+            ArrayBuffer[Definition[?]]()
           )
         val (circuit, dut) =
           Builder.build(Module(gen()), context)

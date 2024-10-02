@@ -81,7 +81,7 @@ object Lookupable {
   private[chisel3] def doLookupData[A, B <: Data](
     data:    B,
     cache:   HashMap[Data, Data],
-    ioMap:   Option[Map[Data, Data]],
+    ioMap:   Option[Map[Data, (String, Data)]],
     context: Option[BaseModule]
   ): B = {
     def impl[C <: Data](d: C): C = d match {
@@ -270,10 +270,10 @@ object Lookupable {
         val ret = that(instance.proto)
 
         // As Property ports are not yet Lookupable, they are skipped here.
-        def getIoMap(hierarchy: Hierarchy[?]): Option[Map[Data, Data]] = {
+        def getIoMap(hierarchy: Hierarchy[?]): Option[Map[Data, (String, Data)]] = {
           hierarchy.underlying match {
             case Clone(x: ModuleClone[_]) => Some(x.ioMap)
-            case Proto(x: BaseModule) => Some(x.getChiselPorts.map { case (_, data: Data) => data -> data }.toMap)
+            case Proto(x: BaseModule) => Some(x.getChiselPorts.map { case (name, data: Data) => data -> (name, data) }.toMap)
             case Clone(x: InstantiableClone[_]) => getIoMap(x._innerContext)
             case Clone(x: InstanceClone[_]) => None
             case other => {

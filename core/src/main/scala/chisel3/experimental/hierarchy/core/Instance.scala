@@ -30,7 +30,7 @@ final case class Instance[+A] private[chisel3] (private[chisel3] val underlying:
     underlying match {
       case Clone(x: ModuleClone[_]) => x.ioMap.values.find(_._1 == name).get._2
       case Proto(x: BaseModule) => x.getChiselPorts.find(_._1 == name).get._2
-      case y => println(y); IO(UInt(1.W)) // todo fix this case
+      case y => throw Error("Cannot find port")
     }
   }
   /** @return the context of any Data's return from inside the instance */

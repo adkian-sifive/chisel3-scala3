@@ -9,7 +9,8 @@ import chisel3.internal.{throwException, Builder}
 import chisel3.experimental.BaseModule
 import chisel3.internal.firrtl.{Component, DefModule, Port}
 import firrtl.annotations.IsModule
-
+import scala.language.dynamics
+import chisel3.internal.BaseModule._
 import scala.annotation.nowarn
 
 /** User-facing Instance type.
@@ -19,12 +20,15 @@ import scala.annotation.nowarn
   * @param underlying The internal representation of the instance, which may be either be directly the object, or a clone of an object
   */
 final case class Instance[+A] private[chisel3] (private[chisel3] val underlying: Underlying[A])
-    extends SealedHierarchy[A] {
+    extends SealedHierarchy[A] with scala.Dynamic {
   underlying match {
     case Proto(p: IsClone[_]) => chisel3.internal.throwException("Cannot have a Proto with a clone!")
     case other => //Ok
   }
 
+  def selectDynamic(name: String): Any = {
+    this.ports.asInstanceOf[ClonePorts].elements(name)
+  }
   /** @return the context of any Data's return from inside the instance */
   private[chisel3] def getInnerDataContext: Option[BaseModule] = underlying match {
     case Proto(value: BaseModule) => Some(value)
@@ -172,7 +176,7 @@ object Instance {
     //   Definition(new EmptyExtModule() {})
     // }
 
-    val ports = experimental.CloneModuleAsRecord(definition.proto)
+    val ports: ClonePorts = experimental.CloneModuleAsRecord(definition.proto)
     val clone = ports._parent.get.asInstanceOf[ModuleClone[T]]
     clone._madeFromDefinition = true
 

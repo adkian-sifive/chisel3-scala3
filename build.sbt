@@ -12,7 +12,7 @@ lazy val commonSettings = Seq (
   autoAPIMappings := true,
   scalaVersion := scala3Version,
   crossScalaVersions := Seq("2.13.10", "2.12.17", scala3Version),
-  scalacOptions := Seq("-rewrite", "-source:3.4-migration")
+  // scalacOptions := Seq("-rewrite", "-source:3.4-migration")
 )
 
 lazy val chiselSettings = Seq (

@@ -84,7 +84,7 @@ object Instance {
       */
     def toTarget: IsModule = i.underlying match {
       case Proto(x: BaseModule) => x.getTarget
-      case Clone(x: IsClone[_] with BaseModule) => x.getTarget
+      case Clone(x: (IsClone[_] & BaseModule)) => x.getTarget
       case _ => throw new InternalErrorException("Match error: i.underlying=${i.underlying}")
     }
 
@@ -93,7 +93,7 @@ object Instance {
       */
     def toAbsoluteTarget: IsModule = i.underlying match {
       case Proto(x) => x.toAbsoluteTarget
-      case Clone(x: IsClone[_] with BaseModule) => x.toAbsoluteTarget
+      case Clone(x: (IsClone[_] & BaseModule)) => x.toAbsoluteTarget
       case _ => throw new InternalErrorException("Match error: i.underlying=${i.underlying}")
     }
 
@@ -109,13 +109,13 @@ object Instance {
       */
     def toRelativeTarget(root: Option[BaseModule]): IsModule = i.underlying match {
       case Proto(x) => x.toRelativeTarget(root)
-      case Clone(x: IsClone[_] with BaseModule) => x.toRelativeTarget(root)
+      case Clone(x: (IsClone[_] & BaseModule)) => x.toRelativeTarget(root)
       case _ => throw new InternalErrorException("Match error: i.underlying=${i.underlying}")
     }
 
     def toRelativeTargetToHierarchy(root: Option[Hierarchy[BaseModule]]): IsModule = i.underlying match {
       case Proto(x) => x.toRelativeTargetToHierarchy(root)
-      case Clone(x: IsClone[_] with BaseModule) => x.toRelativeTargetToHierarchy(root)
+      case Clone(x: (IsClone[_] & BaseModule)) => x.toRelativeTargetToHierarchy(root)
       case _ => throw new InternalErrorException("Match error: i.underlying=${i.underlying}")
     }
 
@@ -131,14 +131,14 @@ object Instance {
     * @param definition the Module being created
     * @return an instance of the module definition
     */
-  def apply[T <: BaseModule with IsInstantiable](definition: Definition[T]): Instance[T] = do_apply(definition)
+  def apply[T <: BaseModule & IsInstantiable](definition: Definition[T]): Instance[T] = do_apply(definition)
 
   /** A constructs an [[Instance]] from a [[Definition]]
     *
     * @param definition the Module being created
     * @return an instance of the module definition
     */
-  def do_apply[T <: BaseModule with IsInstantiable](
+  def do_apply[T <: BaseModule & IsInstantiable](
     definition: Definition[T]
   ): Instance[T] = {
     // Check to see if the module is already defined internally or externally

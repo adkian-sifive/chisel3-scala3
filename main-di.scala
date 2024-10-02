@@ -15,11 +15,13 @@ class AddTwo(width: Int) extends Module {
   val addOneDef = Definition(new AddOne(width))
   val i0 = Instance(addOneDef)
   val i1 = Instance(addOneDef)
-  // i0.in := in
-  // i1.in := in
-  i0.selectDynamic("in").asInstanceOf[UInt] := in
-  i1.selectDynamic("in").asInstanceOf[UInt] := i0.selectDynamic("out").asInstanceOf[UInt]
-  out   := i1.selectDynamic("out").asInstanceOf[UInt]
+  // long form for dynamic selects (syntactic sugar is below)
+  // i0.selectDynamic("in").asInstanceOf[UInt] := in
+  // i1.selectDynamic("in").asInstanceOf[UInt] := i0.selectDynamic("out").asInstanceOf[UInt]
+  // out   := i1.selectDynamic("out").asInstanceOf[UInt]
+  i0.in := in
+  i1.in := in
+  out := i1.out
 }
 
 

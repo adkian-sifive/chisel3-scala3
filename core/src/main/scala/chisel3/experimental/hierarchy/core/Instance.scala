@@ -26,7 +26,7 @@ final case class Instance[+A] private[chisel3] (private[chisel3] val underlying:
     case other => //Ok
   }
 
-  def selectDynamic(name: String): Any = {
+  def selectDynamic(name: String): Data = {
     this.ports.asInstanceOf[ClonePorts].elements(name)
   }
   /** @return the context of any Data's return from inside the instance */

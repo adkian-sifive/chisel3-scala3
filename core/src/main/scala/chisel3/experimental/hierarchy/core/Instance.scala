@@ -13,6 +13,18 @@ import scala.language.dynamics
 import chisel3.internal.BaseModule._
 import scala.annotation.nowarn
 
+import scala.quoted.*
+import scala.quoted
+
+def selectDyanamicImpl(name: Expr[String], i: Expr[Instance[?]])(using q: Quotes)= {
+  println('{$i.underlying})
+  '{$i.underlying} match {
+    case '{Clone($x: ModuleClone[?])} => '{$x.ioMap.values.find(_._1 == $name).get._2}
+    case '{Proto($x: BaseModule)} => '{$x.getChiselPorts.find(_._1 == $name).get._2}
+    case y => '{IO(UInt(1.W))}
+  }
+}
+
 /** User-facing Instance type.
   * Represents a unique instance of type `A` which are marked as @instantiable
   * Can be created using Instance.apply method.
@@ -26,13 +38,8 @@ final case class Instance[+A] private[chisel3] (private[chisel3] val underlying:
     case other => //Ok
   }
 
-  def selectDynamic(name: String): Data = {
-    underlying match {
-      case Clone(x: ModuleClone[_]) => x.ioMap.values.find(_._1 == name).get._2
-      case Proto(x: BaseModule) => x.getChiselPorts.find(_._1 == name).get._2
-      case y => throw Error("Cannot find port")
-    }
-  }
+  transparent inline def selectDynamic(name: String): Any = ${selectDyanamicImpl('name, 'this)}
+
   /** @return the context of any Data's return from inside the instance */
   private[chisel3] def getInnerDataContext: Option[BaseModule] = underlying match {
     case Proto(value: BaseModule) => Some(value)
